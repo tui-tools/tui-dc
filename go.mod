@@ -1,4 +1,4 @@
-module github.com/tui-tools/tui-template
+module github.com/tui-tools/tui-dc
 
 go 1.27.0
 

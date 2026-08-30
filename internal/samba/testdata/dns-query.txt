@@ -1,0 +1,16 @@
+  Name=, Records=3, Children=6
+    SOA: serial=110, refresh=900, retry=600, expire=86400, minttl=3600, ns=dc1.lab.example., email=hostmaster.lab.example. (flags=600000f0, serial=110, ttl=3600)
+    NS: dc1.lab.example. (flags=600000f0, serial=1, ttl=900)
+    A: 10.10.0.10 (flags=600000f0, serial=110, ttl=900)
+  Name=_msdcs, Records=0, Children=0
+  Name=_sites, Records=0, Children=1
+  Name=_tcp, Records=0, Children=0
+  Name=_udp, Records=0, Children=0
+  Name=dc1, Records=1, Children=0
+    A: 10.10.0.10 (flags=f0, serial=110, ttl=900)
+  Name=files, Records=1, Children=0
+    CNAME: dc1.lab.example. (flags=f0, serial=118, ttl=3600)
+  Name=ws01, Records=1, Children=0
+    A: 10.10.0.21 (flags=f0, serial=115, ttl=900)
+  Name=ws02, Records=1, Children=0
+    A: 10.10.0.22 (flags=f0, serial=116, ttl=900)

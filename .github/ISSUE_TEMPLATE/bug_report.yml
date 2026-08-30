@@ -1,13 +1,12 @@
-# Bug report form for tui-template.
+# Bug report form for a tui-tools tool.
 #
-# Rendered from tui-kit/templates/ISSUE_TEMPLATE/bug_report.yml — every tool in
-# the family asks the same questions in the same order, so edit it there and
-# render again rather than editing this copy. Renaming the template renames the
-# tool in it too; the form itself stays as it is.
+# Copy to .github/ISSUE_TEMPLATE/bug_report.yml in the tool's repository and
+# replace every tui-dc with the tool name. The repository's own config.yml
+# and feature_request.yml are not part of this template and stay as they are.
 #
-# The first field is the whole point: `tui-template --report` prints the tool
-# and kit versions, the backend and its version, the distribution, the kernel,
-# the terminal and where the binary came from, in one block that is safe to
+# The first field is the whole point: `tui-dc --report` prints the tool and
+# kit versions, the backend and its version, the distribution, the kernel, the
+# terminal and where the binary came from, in one block that is safe to
 # publish. Asking for it once, in a fixed shape, is what stops a report from
 # turning into three rounds of "which version, on what?".
 name: Bug report
@@ -22,12 +21,12 @@ body:
   - type: textarea
     id: report
     attributes:
-      label: Output of `tui-template --report`
+      label: Output of `tui-dc --report`
       description: |
-        Run `tui-template --report` and paste the output verbatim, without
-        editing it. It names the versions, the backend, the distribution, the
-        kernel and the terminal — and it deliberately carries no hostname,
-        user name, home path or address, so it is safe to publish as it is.
+        Run `tui-dc --report` and paste the output verbatim, without editing
+        it. It names the versions, the backend, the distribution, the kernel
+        and the terminal — and it deliberately carries no hostname, user name,
+        home path or address, so it is safe to publish as it is.
       render: shell
     validations:
       required: true
@@ -47,7 +46,7 @@ body:
         moment it went wrong. If the state of the machine matters, say what it
         was.
       placeholder: |
-        1. Start `tui-template`
+        1. Start `tui-dc`
         2. …
         3. …
     validations:
@@ -67,8 +66,8 @@ body:
         `--demo` runs against sample data and never touches the system, so a
         bug that shows up there is one anybody can reproduce on any machine.
       options:
-        - label: I tried `tui-template --demo`, and it reproduces there too
-        - label: I tried `tui-template --demo`, and it does not reproduce there
+        - label: I tried `tui-dc --demo`, and it reproduces there too
+        - label: I tried `tui-dc --demo`, and it does not reproduce there
   - type: textarea
     id: output
     attributes:

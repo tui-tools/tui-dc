@@ -1,0 +1,20 @@
+INFO 2026-08-30 21:26:46,780 pid:62 /usr/lib/python3/dist-packages/samba/netcmd/testparm.py #96: Loaded smb config files from /etc/samba/smb.conf
+INFO 2026-08-30 21:26:46,780 pid:62 /usr/lib/python3/dist-packages/samba/netcmd/testparm.py #97: Loaded services file OK.
+WARNING 2026-08-30 21:26:46,780 pid:62 /usr/lib/python3/dist-packages/samba/netcmd/testparm.py #180: When acting as Active Directory domain controller, acl_xattr should be in vfs objects.
+# Global parameters
+[global]
+	dns forwarder = 10.10.0.1
+	netbios name = DC1
+	realm = LAB.EXAMPLE
+	server role = active directory domain controller
+	workgroup = LAB
+	idmap_ldb:use rfc2307 = yes
+	vfs objects = dfs_samba4 xattr_tdb
+
+[sysvol]
+	path = /var/lib/samba/sysvol
+	read only = No
+
+[netlogon]
+	path = /var/lib/samba/sysvol/lab.example/scripts
+	read only = No

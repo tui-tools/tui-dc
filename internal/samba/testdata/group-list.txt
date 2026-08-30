@@ -1,0 +1,38 @@
+Denied RODC Password Replication Group
+RAS and IAS Servers
+Print Operators
+Read-only Domain Controllers
+Server Operators
+Schema Admins
+Remote Desktop Users
+Domain Users
+Enterprise Read-only Domain Controllers
+Cert Publishers
+Domain Guests
+Enterprise Admins
+Domain Computers
+Account Operators
+Distributed COM Users
+Allowed RODC Password Replication Group
+Windows Authorization Access Group
+Domain Controllers
+Certificate Service DCOM Access
+Incoming Forest Trust Builders
+Performance Monitor Users
+Helpdesk
+Cryptographic Operators
+Network Configuration Operators
+Group Policy Creator Owners
+Event Log Readers
+Backup Operators Lab
+Terminal Server License Servers
+Backup Operators
+Users
+IIS_IUSRS
+Performance Log Users
+Pre-Windows 2000 Compatible Access
+Guests
+Administrators
+Protected Users
+Replicator
+Domain Admins

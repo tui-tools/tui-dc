@@ -1,0 +1,36 @@
+dn: CN=Alice Nunes,CN=Users,DC=lab,DC=example
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: user
+cn: Alice Nunes
+sn: Nunes
+givenName: Alice
+instanceType: 4
+whenCreated: 20260830212623.0Z
+whenChanged: 20260830212623.0Z
+displayName: Alice Nunes
+uSNCreated: 3946
+name: Alice Nunes
+objectGUID: 99ffcf26-d73b-4fc6-8b78-ed7adc395978
+badPwdCount: 0
+codePage: 0
+countryCode: 0
+badPasswordTime: 0
+lastLogoff: 0
+lastLogon: 0
+primaryGroupID: 513
+objectSid: S-1-5-21-525131290-1255179151-1935851367-1101
+accountExpires: 9223372036854775807
+logonCount: 0
+sAMAccountName: alice
+sAMAccountType: 805306368
+userPrincipalName: alice@lab.example
+objectCategory: CN=Person,CN=Schema,CN=Configuration,DC=lab,DC=example
+mail: alice@lab.example
+pwdLastSet: 134325987833761618
+userAccountControl: 512
+uSNChanged: 3948
+memberOf: CN=Helpdesk,CN=Users,DC=lab,DC=example
+distinguishedName: CN=Alice Nunes,CN=Users,DC=lab,DC=example
+

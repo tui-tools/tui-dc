@@ -1,11 +1,4 @@
 # Generated from tui-kit/templates/codeql.yml.
-#
-# `go vet` and the golangci-lint bar in ci.yml read one package at a time.
-# CodeQL is the family's static application security testing pass: it follows
-# data across packages, so it sees the things that only look wrong once you
-# know where a value came from — a command argument built from input the tool
-# read, a path joined from something outside the repository. Findings land in
-# the repository's code scanning view beside the Scorecard results.
 name: CodeQL
 
 on:
@@ -25,6 +18,14 @@ jobs:
   analyze:
     name: analyze go
     runs-on: ubuntu-latest
+    # Code scanning needs GitHub Advanced Security, which a private
+    # repository on this plan does not have: the upload step fails with
+    # "Advanced Security must be enabled for this repository". tui-dc is
+    # private until it has been validated against a real domain controller,
+    # so the job is skipped while it is, and starts running by itself on the
+    # day the repository is made public. The workflow is otherwise the
+    # family's, unmodified.
+    if: github.event.repository.visibility == 'public'
     permissions:
       # Upload the findings to the repository's code scanning view.
       security-events: write

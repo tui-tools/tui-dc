@@ -1,0 +1,2 @@
+WARNING: Using passwords on command line is insecure. Installing the setproctitle python module will hide these from shortly after program start.
+ERROR: Connecting to DNS RPC server 127.0.0.1 failed with (3221226038, 'The transport-connection attempt was refused by the remote system.')

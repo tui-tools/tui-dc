@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "name": "tui-template",
-  "binary": "tui-template",
-  "tagline": "A working skeleton for a new tui-tools tool",
-  "description": "The starting point for a new tool in the family. Press **Use this template**, rename it, replace one package, and you have a tool that looks and behaves like the rest.\n\nIt is not a pile of TODOs: it is a working tool. It lists the files in a directory and can update a file's timestamp, which is deliberately trivial — what matters is the shape around it, and that shape is already correct: the action table that generates the key map, the help screen and the confirm dialog; the backend interface with a real and a fake implementation; `--demo`; CI; and GoReleaser.\n\nThis `tool.json` is itself the example. It is a valid manifest, validated against [the schema](https://github.com/tui-tools/tui-kit/blob/main/schema/tool.schema.json) on every CI run, and the values are the ones you replace.",
-  "category": "template",
-  "homepage": "https://github.com/tui-tools/tui-template",
-  "repo": "https://github.com/tui-tools/tui-template",
+  "name": "tui-dc",
+  "binary": "tui-dc",
+  "tagline": "A Samba Active Directory domain, administered from the terminal",
+  "description": "A terminal UI over `samba-tool` for a machine that is a Samba Active Directory domain controller. It opens read-only: the domain's name and functional levels, the role this host plays in it, the accounts, the groups, the machine accounts, the domain's own DNS zone, and the state of replication per naming context.\n\nEvery change is one `samba-tool` command, shown in full and confirmed before it runs — and no password is ever an argument. samba-tool warns about that itself, because a command line is visible in `ps` to every user on the machine, so creating an account and resetting a password ask samba-tool for a random password and show what it printed.\n\nIt does not provision, join or demote a domain. Those have no undo, they happen once, and their command lines are worth reading in a shell where they can be checked twice.\n\nThis is the domain controller side of Samba. The file server side — smb.conf, shares, sessions, the password database — is [tui-samba](https://github.com/tui-tools/tui-samba), and the two do not overlap.",
+  "category": "users",
+  "homepage": "https://github.com/tui-tools/tui-dc",
+  "repo": "https://github.com/tui-tools/tui-dc",
   "license": "MIT",
   "platforms": [
     "linux/amd64",
@@ -16,30 +16,62 @@
   "logo": "assets/logo.png",
   "screenshots": [
     {
-      "path": "docs/screenshots/tui-template-main.png",
-      "caption": "The list: the four bands every tool in the family draws"
+      "path": "docs/screenshots/tui-dc-domain.png",
+      "caption": "The domain screen: what the controller answered, what this host is, and the functional levels"
     },
     {
-      "path": "docs/screenshots/tui-template-touch.png",
-      "caption": "The confirm dialog, showing the exact command line before it runs"
+      "path": "docs/screenshots/tui-dc-users.png",
+      "caption": "The accounts screen, with the state of each account read on demand"
     },
     {
-      "path": "docs/screenshots/tui-template-help.png",
+      "path": "docs/screenshots/tui-dc-suspend.png",
+      "caption": "The confirm dialog, showing the exact samba-tool command before it runs"
+    },
+    {
+      "path": "docs/screenshots/tui-dc-help.png",
       "caption": "The help screen, generated from the action table"
     }
   ],
   "keys": [
     {
-      "key": "t",
-      "action": "Touch the selected file"
+      "key": "tab / 1…6",
+      "action": "Move between domain, users, groups, computers, DNS and replication"
+    },
+    {
+      "key": "enter",
+      "action": "Open the selected row, reading its detail if it has not been read"
+    },
+    {
+      "key": "n",
+      "action": "Create an account, a group or a DNS record"
+    },
+    {
+      "key": "d",
+      "action": "Delete the selected account, group or record"
+    },
+    {
+      "key": "e / s",
+      "action": "Enable or suspend the selected account"
+    },
+    {
+      "key": "p",
+      "action": "Reset the selected account's password to a random one"
+    },
+    {
+      "key": "x",
+      "action": "Set when the selected account expires"
+    },
+    {
+      "key": "a / m",
+      "action": "Add or remove a member of the selected group"
     },
     {
       "key": "/",
-      "action": "Filter the list"
+      "action": "Filter the current screen"
     },
     {
       "key": "r / ctrl+r",
-      "action": "Re-read the directory"
+      "action": "Re-read the domain"
     },
     {
       "key": "?",
@@ -52,28 +84,33 @@
   ],
   "backends": [
     {
-      "name": "coreutils",
-      "binary": "touch",
+      "name": "samba",
+      "binary": "samba-tool",
       "versionCommand": [
-        "touch",
+        "samba-tool",
         "--version"
       ],
-      "versionRegex": "coreutils\\) ([0-9][0-9.]*)",
-      "minimum": "8.0",
+      "versionRegex": "([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)",
+      "minimum": "4.13",
       "searchPaths": [
-        "/usr/bin/touch",
-        "/bin/touch"
+        "/usr/bin/samba-tool",
+        "/usr/sbin/samba-tool",
+        "/usr/local/bin/samba-tool"
       ],
       "features": [
         {
-          "name": "no-dereference",
-          "since": "8.1"
+          "name": "computer-subcommand",
+          "since": "4.8"
         }
       ],
       "notes": [
         {
-          "range": "<8.1",
-          "impact": "`touch -h` is missing, so the timestamp of a symlink is set on its target instead of on the link"
+          "range": "<4.8",
+          "impact": "`samba-tool computer` does not exist, so the computers screen is empty"
+        },
+        {
+          "range": "<4.13",
+          "impact": "untested: the output of `domain info`, `dns query` and `drs showrepl` has changed shape across releases and the parsers are only checked against 4.19 and 4.22"
         }
       ]
     }
@@ -82,56 +119,57 @@
     "repo_url": "https://pkgs.tui.tools",
     "source": {
       "available": true,
-      "command": "git clone https://github.com/tui-tools/tui-template\ncd tui-template && make demo",
-      "url": "https://github.com/tui-tools/tui-template",
-      "note": "Or press \"Use this template\" on GitHub, which is the point of it."
+      "command": "git clone https://github.com/tui-tools/tui-dc\ncd tui-dc && make demo",
+      "url": "https://github.com/tui-tools/tui-dc",
+      "note": "`make demo` runs against a sample domain, so it needs no Samba at all."
     },
     "pacman": {
       "available": false,
-      "package": "tui-template",
+      "package": "tui-dc",
       "repo": "tui-tools",
       "requires_repo_setup": true,
-      "command": "sudo pacman -S tui-template",
+      "command": "sudo pacman -S tui-dc",
       "url": "https://pkgs.tui.tools/arch",
-      "note": "The template is never packaged. Your tool's channel turns available once its first release lands in pkgs.tui.tools."
+      "note": "Not released yet. The channel turns available once the first release lands in pkgs.tui.tools."
     },
     "apt": {
       "available": false,
-      "package": "tui-template",
+      "package": "tui-dc",
       "repo": "tui-tools",
       "requires_repo_setup": true,
-      "command": "sudo apt install tui-template",
+      "command": "sudo apt install tui-dc",
       "url": "https://pkgs.tui.tools/deb",
-      "note": "The template is never packaged. Your tool's channel turns available once its first release lands in pkgs.tui.tools."
+      "note": "Not released yet. The channel turns available once the first release lands in pkgs.tui.tools."
     },
     "dnf": {
       "available": false,
-      "package": "tui-template",
+      "package": "tui-dc",
       "repo": "tui-tools",
       "requires_repo_setup": true,
-      "command": "sudo dnf install tui-template",
+      "command": "sudo dnf install tui-dc",
       "url": "https://pkgs.tui.tools/rpm",
-      "note": "The template is never packaged. Your tool's channel turns available once its first release lands in pkgs.tui.tools."
+      "note": "Not released yet. The channel turns available once the first release lands in pkgs.tui.tools."
     },
     "binary": {
       "available": false,
-      "pattern": "tui-template_{version}_linux_{arch}.tar.gz",
-      "command": "curl -fsSL https://github.com/tui-tools/tui-template/releases/download/v{version}/tui-template_{version}_linux_{arch}.tar.gz | tar -xz tui-template\nsudo install -m0755 tui-template /usr/local/bin/tui-template",
-      "url": "https://github.com/tui-tools/tui-template/releases",
-      "note": "The template is never released. Your tool is, once you tag v0.1.0."
+      "pattern": "tui-dc_{version}_linux_{arch}.tar.gz",
+      "command": "curl -fsSL https://github.com/tui-tools/tui-dc/releases/download/v{version}/tui-dc_{version}_linux_{arch}.tar.gz | tar -xz tui-dc\nsudo install -m0755 tui-dc /usr/local/bin/tui-dc",
+      "url": "https://github.com/tui-tools/tui-dc/releases",
+      "note": "Not released yet."
     }
   },
   "security": {
-    "needs_sudo": "Only the touch action escalates, and only when the configured prefix is non-empty. Listing a directory is an ordinary read. Replace this sentence with what your own tool escalates for.",
+    "needs_sudo": "Everything. samba-tool opens the directory database directly and that database is readable only by root, so even the read path escalates. A machine where escalation is refused says so at startup rather than showing an empty domain.",
     "preview_before_run": true,
     "no_daemon": true,
-    "no_network": true,
+    "no_network": false,
     "static_binary": true,
     "signed_releases": false,
     "config_paths": [
-      "/etc/tui-template/config.toml",
-      "~/.config/tui-template/config.toml"
-    ]
+      "/etc/tui-dc/config.toml",
+      "~/.config/tui-dc/config.toml"
+    ],
+    "no_network_note": "samba-tool talks to a controller, and this tool points it at this host. `domain info` is a CLDAP query, `dns query` a DNS RPC call and `drs showrepl` a DRS one, so there is loopback traffic on every read. Nothing leaves the machine and nothing is fetched from the internet."
   },
   "maintainers": [
     {
@@ -139,12 +177,15 @@
       "github": "edimarlnx"
     }
   ],
-  "since": "2026-08-29",
+  "since": "2026-08-30",
   "keywords": [
-    "template",
-    "scaffold",
-    "bubbletea",
-    "starter"
+    "active-directory",
+    "samba",
+    "domain-controller",
+    "ldap",
+    "kerberos",
+    "dns",
+    "samba-tool"
   ],
   "unreleased": true
 }

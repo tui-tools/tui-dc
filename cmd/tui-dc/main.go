@@ -1,11 +1,15 @@
-// Command tui-template is the starting point for a new tui-tools tool. It
-// lists the files in a directory and can update a file's timestamp, which is
-// deliberately trivial: what matters is the shape around it, which is the same
-// in every tool of the family.
+// Command tui-dc administers a Samba Active Directory domain controller from
+// the terminal.
 //
-// Rename it, replace internal/tool with your own subject, and keep the
-// contract: read-only by default, and no change without a previewed and
-// confirmed command line.
+// It is read-mostly. Opening it reads the domain — its name, its functional
+// levels, the role this host plays, the accounts, the groups, the machine
+// accounts, the domain's DNS zone and the state of replication — and shows all
+// of it without changing anything. Every change is one `samba-tool` command,
+// shown in full and confirmed before it runs.
+//
+// It does not provision, join or demote a domain. Those have no undo, they are
+// rare, and their command lines are worth reading in a shell where they can be
+// checked twice.
 package main
 
 import (
@@ -15,27 +19,30 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tui-tools/tui-dc/internal/directory"
+	"github.com/tui-tools/tui-dc/internal/samba"
+	"github.com/tui-tools/tui-kit/compat"
 	"github.com/tui-tools/tui-kit/config"
 	"github.com/tui-tools/tui-kit/theme"
-	"github.com/tui-tools/tui-template/internal/tool"
 )
 
 // toolName is the binary name, which is also the configuration directory:
-// /etc/tui-template/config.toml and ~/.config/tui-template/config.toml.
-const toolName = "tui-template"
+// /etc/tui-dc/config.toml and ~/.config/tui-dc/config.toml.
+const toolName = "tui-dc"
 
-// keyDir is this tool's own configuration key. Yours go here.
-const keyDir = "dir"
+// keyServer is the controller the read path asks. It defaults to this host,
+// because the tool administers the controller it runs on.
+const keyServer = "server"
 
 // version is stamped by the release build (-ldflags "-X main.version=…").
 var version = "dev"
 
 // defaults declares the configuration keys the tool understands. Only these
-// are read from the environment (TUI_TEMPLATE_DIR, …), so an unrelated
-// variable can never leak into the configuration.
+// are read from the environment (TUI_DC_SERVER, …), so an unrelated variable
+// can never leak into the configuration.
 func defaults() map[string]string {
 	return map[string]string{
-		keyDir:          ".",
+		keyServer:       samba.DefaultServer,
 		config.KeySudo:  "sudo -n",
 		config.KeyTheme: "",
 	}
@@ -44,8 +51,9 @@ func defaults() map[string]string {
 // options holds the parsed command line.
 type options struct {
 	demo        bool
+	check       bool
 	report      bool
-	dir         string
+	server      string
 	themePath   string
 	sudo        string
 	showVersion bool
@@ -60,21 +68,24 @@ func parseFlags(args []string, out *os.File) (options, error) {
 	fs := flag.NewFlagSet(toolName, flag.ContinueOnError)
 	fs.SetOutput(out)
 	fs.BoolVar(&opts.demo, "demo", false,
-		"run against sample data, without touching anything")
+		"run against a sample domain, without touching anything")
+	fs.BoolVar(&opts.check, "check", false,
+		"run the read path once and print what it parsed as JSON, then exit "+
+			"(no UI, no changes: safe to run anywhere, including in CI)")
 	fs.BoolVar(&opts.report, "report", false, reportUsage)
-	fs.StringVar(&opts.dir, "dir", "",
-		"directory to list (overrides the config file)")
+	fs.StringVar(&opts.server, "server", "",
+		"the domain controller to read (overrides the config file)")
 	fs.StringVar(&opts.themePath, "theme", "",
 		"path to an Omarchy-style colors.toml (overrides the config file)")
 	fs.StringVar(&opts.sudo, "sudo", "",
 		"privilege escalation prefix, e.g. \"sudo -n\" or \"\" to disable")
 	fs.BoolVar(&opts.showVersion, "version", false, "print the version and exit")
 	fs.Usage = func() {
-		_, _ = fmt.Fprintf(out, "tui-template — a starting point for a tui-tools tool\n\n"+
-			"Usage:\n  tui-template [flags]\n\nFlags:\n")
+		_, _ = fmt.Fprintf(out, "tui-dc — a Samba Active Directory domain, "+
+			"administered from the terminal\n\nUsage:\n  tui-dc [flags]\n\nFlags:\n")
 		fs.PrintDefaults()
 		_, _ = fmt.Fprintf(out, "\nConfiguration is read from %s, then %s, "+
-			"then TUI_TEMPLATE_* in the environment.\n",
+			"then TUI_DC_* in the environment.\n",
 			config.SystemPathFor(toolName), config.UserPathFor(toolName))
 	}
 	if err := fs.Parse(args); err != nil {
@@ -128,23 +139,23 @@ func run(args []string) error {
 	}
 
 	// --report is the non-interactive path that must work everywhere. It reads
-	// nothing privileged and it survives a machine where no backend can be
-	// built, because "there is nothing here to drive" is one of the things a
-	// bug report has to be able to say. So it comes before the backend is
-	// required.
+	// nothing privileged and it survives a machine with no Samba on it,
+	// because "there is nothing here to drive" is one of the things a bug
+	// report has to be able to say. So it comes before the backend is required.
 	if opts.report {
 		return runReport(cfg, opts, os.Stdout)
 	}
 
-	backend, err := pickBackend(cfg, opts)
+	backendCompat := probeCompat(context.Background(), opts.demo)
+
+	backend, err := pickBackend(cfg, opts, backendCompat)
 	if err != nil {
 		return err
 	}
 
-	// The backend's version is probed once, at startup, and shown in the
-	// header: a version nobody has tested says so there instead of surprising
-	// the user later.
-	backendCompat := probeCompat(context.Background(), opts.demo)
+	if opts.check {
+		return runCheck(backend, backendCompat, os.Stdout)
+	}
 
 	program := tea.NewProgram(newApp(backend, theme.New(), backendCompat),
 		tea.WithAltScreen())
@@ -155,8 +166,8 @@ func run(args []string) error {
 // applyOverrides folds the command line into the configuration, which is the
 // last and highest-precedence layer.
 func applyOverrides(cfg *config.Config, opts options) {
-	if opts.dir != "" {
-		cfg.Set(keyDir, opts.dir)
+	if opts.server != "" {
+		cfg.Set(keyServer, opts.server)
 	}
 	if opts.themePath != "" {
 		cfg.Set(config.KeyTheme, opts.themePath)
@@ -169,9 +180,12 @@ func applyOverrides(cfg *config.Config, opts options) {
 }
 
 // pickBackend returns the demo backend or the real one.
-func pickBackend(cfg config.Config, opts options) (tool.Backend, error) {
+func pickBackend(cfg config.Config, opts options,
+	backendCompat compat.Result) (directory.Backend, error) {
 	if opts.demo {
-		return tool.NewFake(), nil
+		return samba.NewFake(), nil
 	}
-	return tool.New(cfg.String(keyDir, "."), cfg.SudoPrefix())
+	return samba.NewReal(
+		samba.Options{Server: cfg.String(keyServer, samba.DefaultServer)},
+		cfg.SudoPrefix(), backendCompat.Caps())
 }
