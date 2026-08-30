@@ -1,11 +1,4 @@
 # Generated from tui-kit/templates/scorecard.yml.
-#
-# Scorecard grades the repository's own supply-chain posture — branch
-# protection, pinned actions, signed releases, whether a security policy
-# exists — from the outside, the same way a person deciding whether to trust
-# the tool would. Publishing the result is the point: the score is public and
-# the badge links to the run that produced it, so the claim is checkable
-# rather than asserted.
 name: Scorecard
 
 on:
@@ -23,6 +16,13 @@ jobs:
   analysis:
     name: analyze
     runs-on: ubuntu-latest
+    # Scorecard grades a repository from the outside and publishes the
+    # result, which it can only do for a public one; the upload also needs
+    # code scanning, and that needs Advanced Security. tui-dc is private
+    # until it has been validated against a real domain controller, so the
+    # job skips itself until the day the repository is made public. The
+    # workflow is otherwise the family's.
+    if: github.event.repository.visibility == 'public'
     permissions:
       # Upload the findings to the repository's code scanning view.
       security-events: write

@@ -1,0 +1,46 @@
+Default-First-Site-Name\DC1
+DSA Options: 0x00000001
+DSA object GUID: 4b1e83a7-6c11-4f0c-9d29-2ac0f9b16d3f
+DSA invocationId: 9d2ba3c4-8f60-4a2e-b7d1-1e8c7a54f0b2
+
+==== INBOUND NEIGHBORS ====
+
+DC=lab,DC=example
+	Default-First-Site-Name\DC2 via RPC
+		DSA object GUID: 7fa4c210-3d95-42b8-9d6a-58c0f2b31a44
+		Last attempt @ Sat Aug 30 09:12:44 2026 UTC was successful
+		0 consecutive failure(s).
+		Last success @ Sat Aug 30 09:12:44 2026 UTC
+
+CN=Configuration,DC=lab,DC=example
+	Default-First-Site-Name\DC2 via RPC
+		DSA object GUID: 7fa4c210-3d95-42b8-9d6a-58c0f2b31a44
+		Last attempt @ Sat Aug 30 09:12:44 2026 UTC failed, result 1256 (WERR_DS_DRA_ACCESS_DENIED)
+		3 consecutive failure(s).
+		Last success @ Sat Aug 30 07:00:11 2026 UTC
+
+CN=Schema,CN=Configuration,DC=lab,DC=example
+	Default-First-Site-Name\DC2 via RPC
+		DSA object GUID: 7fa4c210-3d95-42b8-9d6a-58c0f2b31a44
+		Last attempt @ Sat Aug 30 09:12:45 2026 UTC was successful
+		0 consecutive failure(s).
+		Last success @ Sat Aug 30 09:12:45 2026 UTC
+
+==== OUTBOUND NEIGHBORS ====
+
+DC=lab,DC=example
+	Default-First-Site-Name\DC2 via RPC
+		DSA object GUID: 7fa4c210-3d95-42b8-9d6a-58c0f2b31a44
+		Last attempt @ Sat Aug 30 09:12:44 2026 UTC was successful
+		0 consecutive failure(s).
+		Last success @ Sat Aug 30 09:12:44 2026 UTC
+
+==== KCC CONNECTION OBJECTS ====
+
+Connection --
+	Connection name: 3b2c9a01-77ef-4c05-8a3d-0f6b41cc9e2a
+	Enabled        : TRUE
+	Server DNS name : dc2.lab.example
+	Server DN name  : CN=NTDS Settings,CN=DC2,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration,DC=lab,DC=example
+		TransportType: RPC
+		options: 0x00000001

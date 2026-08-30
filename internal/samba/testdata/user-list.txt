@@ -1,0 +1,6 @@
+alice
+Guest
+krbtgt
+Administrator
+svc-backup
+bob

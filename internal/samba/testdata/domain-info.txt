@@ -1,0 +1,7 @@
+Forest           : lab.example
+Domain           : lab.example
+Netbios domain   : LAB
+DC name          : dc1.lab.example
+DC netbios name  : DC1
+Server site      : Default-First-Site-Name
+Client site      : Default-First-Site-Name

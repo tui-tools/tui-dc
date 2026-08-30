@@ -1,0 +1,1 @@
+ERROR(<class 'samba.drs_utils.drsException'>): DRS connection to dc1.lab.example failed - drsException: DRS connection to dc1.lab.example failed: (3221225524, 'The object name is not found.')
