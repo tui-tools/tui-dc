@@ -204,12 +204,13 @@ type Model struct {
 	// Reachable reports that a domain controller answered `domain info`.
 	Reachable bool `json:"reachable"`
 
-	Domain    Domain      `json:"domain"`
-	Users     []User      `json:"users,omitempty"`
-	Groups    []Group     `json:"groups,omitempty"`
-	Computers []Computer  `json:"computers,omitempty"`
-	Zone      Zone        `json:"zone"`
-	Repl      Replication `json:"replication"`
+	Domain    Domain         `json:"domain"`
+	Policy    PasswordPolicy `json:"passwordPolicy"`
+	Users     []User         `json:"users,omitempty"`
+	Groups    []Group        `json:"groups,omitempty"`
+	Computers []Computer     `json:"computers,omitempty"`
+	Zone      Zone           `json:"zone"`
+	Repl      Replication    `json:"replication"`
 
 	// Notes are the one-line reasons a part of the read did not happen. They
 	// are collected rather than fatal: a machine where `drs showrepl` is

@@ -200,12 +200,14 @@ func TestPromptedActionUsesWhatWasTyped(t *testing.T) {
 	}
 }
 
-// TestReadOnlyScreensRunNothing states the phase-one boundary from the UI's
-// side: on the domain, computers and replication screens, no key builds a
-// command.
+// TestReadOnlyScreensRunNothing states the boundary from the UI's side: on
+// the computers and replication screens, no key builds a command. The domain
+// screen is no longer in this list — it carries the policy edit and, on a
+// machine with no domain, the provision wizard — and its own guardrails are
+// tested in wizard_test.go.
 func TestReadOnlyScreensRunNothing(t *testing.T) {
 	for _, screen := range []directory.Screen{
-		directory.ScreenDomain, directory.ScreenComputers, directory.ScreenRepl,
+		directory.ScreenComputers, directory.ScreenRepl,
 	} {
 		a, fake := newTestApp(t)
 		a.screen = screen

@@ -3,7 +3,7 @@
   "name": "tui-dc",
   "binary": "tui-dc",
   "tagline": "A Samba Active Directory domain, administered from the terminal",
-  "description": "A terminal UI over `samba-tool` for a machine that is a Samba Active Directory domain controller. It opens read-only: the domain's name and functional levels, the role this host plays in it, the accounts, the groups, the machine accounts, the domain's own DNS zone, and the state of replication per naming context.\n\nEvery change is one `samba-tool` command, shown in full and confirmed before it runs — and no password is ever an argument. samba-tool warns about that itself, because a command line is visible in `ps` to every user on the machine, so creating an account and resetting a password ask samba-tool for a random password and show what it printed.\n\nIt does not provision, join or demote a domain. Those have no undo, they happen once, and their command lines are worth reading in a shell where they can be checked twice.\n\nThis is the domain controller side of Samba. The file server side — smb.conf, shares, sessions, the password database — is [tui-samba](https://github.com/tui-tools/tui-samba), and the two do not overlap.",
+  "description": "A terminal UI over `samba-tool` for a machine that is a Samba Active Directory domain controller. It opens read-only: the domain's name and functional levels, the role this host plays in it, the password policy, the accounts, the groups, the machine accounts, the domain's own DNS zone, and the state of replication per naming context.\n\nEvery change is one `samba-tool` command, shown in full and confirmed before it runs — and no password is ever an argument. samba-tool warns about that itself, because a command line is visible in `ps` to every user on the machine, so creating an account and resetting a password ask samba-tool for a random password and show what it printed — and provisioning omits `--adminpass` so samba-tool generates the Administrator password itself and prints it exactly once.\n\nOn a machine that has samba-tool and no domain, a wizard provisions one: realm, NetBIOS name, DNS backend, optional forwarder, the realm typed back as a second confirmation, then the usual previewed command. It does not join or demote a domain: both touch a trust relationship with another controller, and are worth reading in a shell where they can be checked twice.",
   "category": "users",
   "homepage": "https://github.com/tui-tools/tui-dc",
   "repo": "https://github.com/tui-tools/tui-dc",
@@ -51,7 +51,11 @@
     },
     {
       "key": "e / s",
-      "action": "Enable or suspend the selected account"
+      "action": "Enable or suspend the account; on the domain screen, edit the password-policy setting"
+    },
+    {
+      "key": "P",
+      "action": "On the domain screen of a host with no domain: provision one (wizard, double-confirmed)"
     },
     {
       "key": "p",

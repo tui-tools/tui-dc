@@ -63,6 +63,9 @@ const (
 
 	DNSAdd    Action = "dns-add"
 	DNSDelete Action = "dns-delete"
+
+	// PasswordPolicySet changes one line of the domain's password policy.
+	PasswordPolicySet Action = "passwordsettings-set"
 )
 
 // Prompt says what an action needs from the user beyond the selected row.
@@ -80,6 +83,9 @@ const (
 	PromptDays
 	// PromptRecord asks for "name type data", which is what a DNS record is.
 	PromptRecord
+	// PromptPolicyValue asks for a password-policy value; what it takes
+	// depends on which setting is selected, and the prompt says so.
+	PromptPolicyValue
 )
 
 // ActionSpec describes one action for the key map, the help screen and the
@@ -151,6 +157,14 @@ var Actions = []ActionSpec{
 		PromptTitle: "Remove member",
 		PromptHelp:  "One of the members listed for this group.",
 		Body:        "The named account loses whatever the group granted it."},
+
+	{Action: PasswordPolicySet, Screen: ScreenDomain, Key: "e", Label: "Edit policy setting",
+		NeedsSelection: true, Needs: PromptPolicyValue, Destructive: true,
+		PromptTitle: "New value",
+		PromptHelp:  "The new value for the selected setting; `default` restores Samba's default.",
+		Body: "One line of the domain's password policy changes, for every account in it. " +
+			"A stricter policy does not lock anyone out today; a looser one weakens " +
+			"every password from now on."},
 
 	{Action: DNSAdd, Screen: ScreenDNS, Key: "n", Label: "Add record",
 		Needs: PromptRecord, PromptTitle: "Add record",
@@ -315,6 +329,26 @@ func BuildCommand(spec ActionSpec, in Intent) (runner.Command, error) {
 		}
 		argv = []string{Bin, "group", verb, target, value}
 
+	case PasswordPolicySet:
+		if target == "" {
+			return runner.Command{}, ErrNothingSelected
+		}
+		field, ok := PolicyFieldByName(target)
+		if !ok {
+			// The target is a flag name from the policy table, never free
+			// text. Anything else is refused so no prompt, parser or future
+			// caller can steer this into an argument samba-tool would read
+			// as some other flag.
+			return runner.Command{}, fmt.Errorf(
+				"%q is not a password-policy setting this tool edits", target)
+		}
+		if err := ValidatePolicyValue(field, value); err != nil {
+			return runner.Command{}, err
+		}
+		argv = []string{Bin, "domain", "passwordsettings", "set",
+			"--" + field.Name + "=" + value}
+		description = "Set " + strings.ToLower(field.Label) + " to " + value
+
 	case DNSAdd:
 		node, recordType, data, err := ParseRecordSpec(in.Value)
 		if err != nil {
@@ -416,6 +450,15 @@ type Backend interface {
 
 	// Build turns an action and an intent into a previewable command.
 	Build(spec ActionSpec, in Intent) (runner.Command, error)
+	// BuildProvision turns what the wizard collected into a previewable
+	// `samba-tool domain provision`. It refuses (ErrDomainExists) on a host
+	// that already serves a domain.
+	BuildProvision(p Provision) (runner.Command, error)
+	// EnableServiceCommand is the previewable `systemctl enable --now <unit>`
+	// offered after a successful provision, with the unit name this
+	// distribution gives the AD DC daemon. False when systemd or the unit
+	// cannot be found.
+	EnableServiceCommand() (runner.Command, bool)
 	// Preview renders the exact command line Run will execute.
 	Preview(cmd runner.Command) string
 	// Run executes a previously previewed command.

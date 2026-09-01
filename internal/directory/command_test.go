@@ -93,7 +93,8 @@ func TestNoPasswordInArgv(t *testing.T) {
 		for _, arg := range cmd.Argv {
 			lower := strings.ToLower(arg)
 			if strings.HasPrefix(lower, "--newpassword") ||
-				strings.HasPrefix(lower, "--password") {
+				strings.HasPrefix(lower, "--password") ||
+				strings.Contains(lower, "adminpass") {
 				t.Errorf("%s puts a password on the command line: %q",
 					spec.Action, cmd.String())
 			}
@@ -187,9 +188,10 @@ func TestActionsForScreen(t *testing.T) {
 		if _, ok := ActionFor(spec.Screen, spec.Key); !ok {
 			t.Errorf("%s is not reachable on its own screen", spec.Action)
 		}
-		if _, ok := ActionFor(ScreenDomain, spec.Key); ok &&
-			spec.Screen != ScreenDomain {
-			t.Errorf("%q leaked onto the read-only domain screen", spec.Key)
+		if got, ok := ActionFor(ScreenDomain, spec.Key); ok &&
+			got.Action != PasswordPolicySet {
+			t.Errorf("%q leaked onto the domain screen, whose one action is "+
+				"the policy edit", spec.Key)
 		}
 		if _, ok := ActionFor(ScreenRepl, spec.Key); ok && spec.Screen != ScreenRepl {
 			t.Errorf("%q leaked onto the read-only replication screen", spec.Key)
@@ -197,14 +199,20 @@ func TestActionsForScreen(t *testing.T) {
 	}
 }
 
-// TestReadOnlyScreensHaveNoActions states the phase-one boundary as a test:
-// the domain, computers and replication screens read and do not change.
+// TestReadOnlyScreensHaveNoActions states the boundary as a test: the
+// computers and replication screens read and do not change, and the domain
+// screen's one action is the password-policy edit — provisioning is a wizard,
+// not a table row, and everything else on that screen stays read-only.
 func TestReadOnlyScreensHaveNoActions(t *testing.T) {
-	for _, screen := range []Screen{ScreenDomain, ScreenComputers, ScreenRepl} {
+	for _, screen := range []Screen{ScreenComputers, ScreenRepl} {
 		if specs := ActionsFor(screen); len(specs) != 0 {
 			t.Errorf("the %s screen has %d actions, and is meant to be read-only",
 				screen.Title(), len(specs))
 		}
+	}
+	specs := ActionsFor(ScreenDomain)
+	if len(specs) != 1 || specs[0].Action != PasswordPolicySet {
+		t.Errorf("the domain screen's actions = %+v, want only the policy edit", specs)
 	}
 }
 

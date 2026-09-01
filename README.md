@@ -27,6 +27,12 @@ runs.
 make demo     # a sample domain, on a machine with no Samba on it
 ```
 
+On a machine that has `samba-tool` and no domain, the domain screen offers one:
+`P` opens the provision wizard — realm, NetBIOS name, DNS backend, optional
+forwarder — and ends in the same previewed, confirmed command as every other
+change, gated by typing the realm back. Run `tui-dc --demo-fresh` to walk it
+against a fake machine.
+
 ## No password ever reaches a command line
 
 samba-tool says this itself, every time you give it one:
@@ -38,15 +44,42 @@ WARNING: Using passwords on command line is insecure.
 It is right: a command line is visible in `ps` to every user on the machine. So
 this tool never builds one. Creating an account and resetting a password both
 run with `--random-password`, and what samba-tool printed is what you hand over.
-There is a test asserting that no action in the table can ever put a password in
-an argv, and it is not there for decoration — it is the rule this tool is built
-around and the first thing a new action would break.
+
+Provisioning follows the same rule by omission: the wizard's command carries no
+`--adminpass` at all. Left out, samba-tool generates a strong Administrator
+password itself and prints `Admin password:` exactly once when provisioning
+finishes — the result screen shows that line once, stores it nowhere, and the
+password never exists in an argv, in this process, or anywhere but samba-tool's
+own output. There is a test asserting that no action in the table can ever put
+a password in an argv, and it is not there for decoration — it is the rule this
+tool is built around and the first thing a new action would break.
+
+## Provisioning a domain
+
+When the read finds `samba-tool` but no domain — `smb.conf` does not say this
+host is a domain controller — the domain screen says so and `P` opens the
+wizard:
+
+1. **Realm** — the domain's DNS name (`lab.example`), validated as one.
+2. **NetBIOS domain** — the short name, prefilled from the realm's first label.
+3. **DNS backend** — `SAMBA_INTERNAL` (default) or `BIND9_DLZ`.
+4. **DNS forwarder** — optional, internal backend only.
+5. **Type the realm back** — a provision decides everything after it, so it
+   gets a second, deliberate confirmation before the usual command preview.
+
+After the command runs, the result screen shows the one-time password, the
+krb5.conf note samba-tool printed, and offers the previewed
+`systemctl enable --now samba-ad-dc.service` (or `samba.service` — the unit is
+detected per distribution) so the new controller actually starts.
+
+The wizard is refused, at the key and again in the backend, on a host that
+already serves a domain: this tool creates a domain, it does not replace one.
 
 ## What it does not do
 
-It does not provision, join or demote a domain. Those have no undo, they happen
-once in a machine's life, and their command lines are worth reading in a shell
-where they can be checked twice.
+It does not join or demote a domain. Both touch a trust relationship with
+another controller, and their command lines are worth reading in a shell where
+they can be checked twice.
 
 It is also not a file server tool. The Samba on a domain controller also serves
 `sysvol` and `netlogon`, but shares, sessions and the password database are
@@ -56,7 +89,7 @@ It is also not a file server tool. The Samba on a domain controller also serves
 
 | Screen | What it reads | What it can change |
 | --- | --- | --- |
-| **domain** | `domain info`, `domain level show`, `testparm` | nothing |
+| **domain** | `domain info`, `domain level show`, `testparm`, `domain passwordsettings show` | provision a new domain (P, when none exists), edit a password-policy setting (e) |
 | **users** | `user list`, then `user show` per row | create, delete, enable, suspend, reset password, set expiry |
 | **groups** | `group list`, then `group listmembers` per row | create, delete, add member, remove member |
 | **computers** | `computer list`, then `computer show` per row | nothing yet |
@@ -190,7 +223,7 @@ pkgs.tui.tools.
 ### Any distribution, static binary — coming soon
 
 ```sh
-curl -fsSL https://github.com/tui-tools/tui-dc/releases/download/v{version}/tui-dc_{version}_linux_amd64.tar.gz | tar -xz tui-dc
+curl -fsSL https://github.com/tui-tools/tui-dc/releases/download/v0.1.0/tui-dc_0.1.0_linux_amd64.tar.gz | tar -xz tui-dc
 sudo install -m0755 tui-dc /usr/local/bin/tui-dc
 ```
 

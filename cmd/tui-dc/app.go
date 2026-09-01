@@ -24,6 +24,10 @@ const (
 	modeConfirm
 	modeInput
 	modeHelp
+	// modeWizard is the provision wizard, a chain of the same dialogs the
+	// other modes use; modeNotice is the result screen a provision ends on.
+	modeWizard
+	modeNotice
 )
 
 // loadTimeout bounds a whole read. It is generous because samba-tool is a
@@ -33,6 +37,10 @@ const loadTimeout = 3 * time.Minute
 
 // runTimeout bounds one change.
 const runTimeout = 60 * time.Second
+
+// provisionUITimeout bounds a provision from the UI's side. It is longer than
+// the backend's own budget, so the truthful error is the backend's.
+const provisionUITimeout = 12 * time.Minute
 
 // detailTimeout bounds one `user show` / `computer show` / `group listmembers`.
 const detailTimeout = 30 * time.Second
@@ -45,6 +53,10 @@ type factRow struct {
 	// note marks a value that is absent or in doubt, so the screen can colour
 	// it without the reader having to know which labels matter.
 	note bool
+	// policy names the password-policy setting this row shows, when it shows
+	// one — it is what the edit key builds its command from, and empty on
+	// every row the tool cannot edit.
+	policy string
 }
 
 // app is the tui-dc Bubble Tea model.
@@ -92,6 +104,8 @@ type app struct {
 	mode    mode
 	confirm ui.Confirm
 	input   ui.Input
+	wizard  wizardState
+	notice  noticeState
 	// pending is the action an open prompt is collecting a value for.
 	pending directory.ActionSpec
 	// pendingTarget is the row that action applies to, captured when the
@@ -169,8 +183,12 @@ func (a *app) load() tea.Cmd {
 // run executes a confirmed command in the background.
 func (a *app) run(cmd runner.Command) tea.Cmd {
 	backend := a.backend
+	timeout := runTimeout
+	if directory.IsProvisionCommand(cmd) {
+		timeout = provisionUITimeout
+	}
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		out, err := backend.Run(ctx, cmd)
 		return ranMsg{cmd: cmd, output: out, err: err}
@@ -265,6 +283,16 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.setStatus(ui.StatusError, runner.FirstLine(msg.err.Error()))
 			return a, a.load()
 		}
+		if directory.IsProvisionCommand(msg.cmd) {
+			// The transcript carries the one-time Administrator password and
+			// the krb5.conf note, which must not scroll away in a status
+			// line: they get the result screen, while the domain reloads
+			// underneath it.
+			a.notice = a.provisionNotice(msg.output)
+			a.mode = modeNotice
+			a.loading = true
+			return a, a.load()
+		}
 		summary := strings.TrimSpace(msg.output)
 		if summary == "" {
 			summary = "done"
@@ -307,6 +335,10 @@ func (a *app) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case modeHelp:
 		a.mode = modeBrowse
 		return a, nil
+	case modeWizard:
+		return a.handleWizard(msg)
+	case modeNotice:
+		return a.handleNotice(msg)
 	case modeDetail:
 		return a.handleDetail(msg)
 	default:
@@ -396,6 +428,15 @@ func (a *app) handleBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// truth for what each key does where.
 	if spec, ok := directory.ActionFor(a.screen, key); ok {
 		return a, a.startAction(spec)
+	}
+
+	// P opens the provision wizard: not in the action table because it is a
+	// chain of prompts rather than one, but ending in the same confirm
+	// dialog. It is uppercase on purpose — a key this consequential should
+	// not be next door to a navigation key.
+	if key == "P" && a.screen == directory.ScreenDomain {
+		a.startWizard()
+		return a, nil
 	}
 
 	switch key {
@@ -552,6 +593,31 @@ func (a *app) openDetail() tea.Cmd {
 func (a *app) startAction(spec directory.ActionSpec) tea.Cmd {
 	var intent directory.Intent
 	intent.Action = spec.Action
+
+	// The domain screen's rows are facts, not named objects, so the policy
+	// edit resolves its own selection: the setting the cursor is on. The
+	// intent's target is the setting's flag name from the policy table, which
+	// BuildCommand checks against that same table — free text cannot reach it.
+	if spec.Action == directory.PasswordPolicySet {
+		row, ok := a.selectedFactRow()
+		if !ok || row.policy == "" {
+			a.setStatus(ui.StatusWarn,
+				"select a password-policy line first — they are the editable rows")
+			return nil
+		}
+		field, ok := directory.PolicyFieldByName(row.policy)
+		if !ok {
+			a.setStatus(ui.StatusWarn, "this line cannot be edited from here")
+			return nil
+		}
+		intent.Target = field.Name
+		a.input = ui.NewInput(field.Label+" — new value", row.value, "")
+		a.input.Help = field.Help
+		a.pending = spec
+		a.pendingTarget = intent
+		a.mode = modeInput
+		return nil
+	}
 
 	if spec.NeedsSelection {
 		name, ok := a.selectedName()
@@ -733,6 +799,15 @@ func (a *app) selectedName() (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// selectedFactRow returns the highlighted row of the domain screen.
+func (a *app) selectedFactRow() (factRow, bool) {
+	index := a.cursor[a.screen]
+	if a.screen != directory.ScreenDomain || index < 0 || index >= len(a.factRows) {
+		return factRow{}, false
+	}
+	return a.factRows[index], true
 }
 
 // selectedRecord returns the highlighted DNS record.

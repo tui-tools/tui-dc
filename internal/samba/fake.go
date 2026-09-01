@@ -28,6 +28,11 @@ type Fake struct {
 	mu  sync.Mutex
 	run *runner.Fake
 
+	// provisioned is whether this fake machine serves a domain yet. A fresh
+	// fake starts without one, so --demo-fresh can walk the provision wizard
+	// end to end; a confirmed provision flips it and populates the domain.
+	provisioned bool
+
 	realm   string
 	netbios string
 	dc      string
@@ -37,6 +42,30 @@ type Fake struct {
 	groups    map[string]*fakeGroup
 	computers map[string]bool
 	records   []directory.Record
+	policy    fakePolicy
+
+	// serviceEnabled is whether the previewed `systemctl enable --now` ran.
+	serviceEnabled bool
+}
+
+// fakePolicy is the sample domain's password policy, held as the values
+// `passwordsettings show` prints. The keys are the policy table's flag names.
+type fakePolicy map[string]string
+
+// defaultPolicy is Samba's own defaults, which is what a real provision
+// leaves behind.
+func defaultPolicy() fakePolicy {
+	return fakePolicy{
+		"complexity":                  "on",
+		"store-plaintext":             "off",
+		"history-length":              "24",
+		"min-pwd-length":              "7",
+		"min-pwd-age":                 "1",
+		"max-pwd-age":                 "42",
+		"account-lockout-duration":    "30",
+		"account-lockout-threshold":   "0",
+		"reset-account-lockout-after": "30",
+	}
 }
 
 // fakeUser is one account in the sample domain.
@@ -67,10 +96,12 @@ type fakeGroup struct {
 // output is a replication screen nobody has looked at.
 func NewFake() *Fake {
 	f := &Fake{
-		realm:   "lab.example",
-		netbios: "LAB",
-		dc:      "dc1",
-		site:    "Default-First-Site-Name",
+		provisioned: true,
+		policy:      defaultPolicy(),
+		realm:       "lab.example",
+		netbios:     "LAB",
+		dc:          "dc1",
+		site:        "Default-First-Site-Name",
 		users: map[string]*fakeUser{
 			"Administrator": {name: "Administrator", uac: 512,
 				description: "Built-in account for administering the computer/domain",
@@ -120,6 +151,18 @@ func NewFake() *Fake {
 	return f
 }
 
+// NewFakeFresh returns a fake machine with samba-tool installed and no domain
+// on it: what `samba-tool domain provision` is for. Confirming the wizard's
+// command provisions the same sample domain NewFake starts with, under the
+// realm the wizard was given — so --demo-fresh walks the exact path a real
+// first boot does, parsers and all.
+func NewFakeFresh() *Fake {
+	f := NewFake()
+	f.provisioned = false
+	f.realm, f.netbios = "", ""
+	return f
+}
+
 // Name identifies the backend.
 func (f *Fake) Name() string { return "demo" }
 
@@ -147,6 +190,27 @@ func (f *Fake) Build(spec directory.ActionSpec, in directory.Intent) (runner.Com
 		in.Zone = f.realm
 	}
 	return directory.BuildCommand(spec, in)
+}
+
+// BuildProvision builds the wizard's command, refusing when a domain already
+// exists — exactly as Real does.
+func (f *Fake) BuildProvision(p directory.Provision) (runner.Command, error) {
+	f.mu.Lock()
+	provisioned := f.provisioned
+	f.mu.Unlock()
+	if provisioned {
+		return runner.Command{}, directory.ErrDomainExists
+	}
+	return directory.BuildProvisionCommand(p)
+}
+
+// EnableServiceCommand offers the systemd step the way a Debian machine
+// would name it.
+func (f *Fake) EnableServiceCommand() (runner.Command, bool) {
+	return runner.Command{
+		Argv:        []string{"systemctl", "enable", "--now", "samba-ad-dc.service"},
+		Description: "Enable and start samba-ad-dc.service",
+	}, true
 }
 
 // Load walks the same read path the real backend does, over this fake's
@@ -200,9 +264,34 @@ func (f *Fake) respond(args []string) (string, error) {
 	if len(args) == 0 {
 		return "", fmt.Errorf("samba-tool: missing subcommand")
 	}
+	// A machine with samba-tool and no domain answers --version and testparm
+	// and fails everything that needs a directory, with the messages the real
+	// samba-tool prints on such a machine. This is what --demo-fresh shows
+	// until the wizard runs.
+	if !f.provisioned {
+		switch {
+		case args[0] == "--version":
+			return "4.22.10-Debian-4.22.10+dfsg-0+deb13u2\n", nil
+		case args[0] == "testparm":
+			return "# Global parameters\n[global]\n" +
+				"\tserver role = standalone server\n" +
+				"\tworkgroup = WORKGROUP\n", nil
+		case args[0] == "domain" && len(args) > 1 && args[1] == "info":
+			return "", fmt.Errorf(
+				"ERROR: Invalid IP address '%s'", args[len(args)-1])
+		default:
+			return "", fmt.Errorf(
+				"ERROR: Unable to open the sam database — this machine is not " +
+					"a domain controller")
+		}
+	}
 	switch {
 	case args[0] == "--version":
 		return "4.22.10-Debian-4.22.10+dfsg-0+deb13u2\n", nil
+
+	case args[0] == "domain" && len(args) > 2 &&
+		args[1] == "passwordsettings" && args[2] == "show":
+		return f.passwordSettings(), nil
 
 	case args[0] == "testparm":
 		return "# Global parameters\n[global]\n" +
@@ -277,10 +366,25 @@ func (f *Fake) apply(cmd runner.Command) (string, error) {
 	defer f.mu.Unlock()
 
 	args := cmd.Argv
+	// The one non-samba command the tool offers: the service step after a
+	// provision.
+	if len(args) > 0 && args[0] == "systemctl" {
+		if !f.provisioned {
+			return "", fmt.Errorf("there is no domain to start yet")
+		}
+		f.serviceEnabled = true
+		return "Created symlink /etc/systemd/system/multi-user.target.wants/" +
+			"samba-ad-dc.service → /usr/lib/systemd/system/samba-ad-dc.service.\n", nil
+	}
 	if len(args) < 3 || args[0] != directory.Bin {
 		return "", fmt.Errorf("samba-tool: cannot parse %q", cmd.String())
 	}
 	switch {
+	case args[1] == "domain" && args[2] == "provision":
+		return f.provision(args)
+	case args[1] == "domain" && len(args) > 3 &&
+		args[2] == "passwordsettings" && args[3] == "set":
+		return f.setPasswordSetting(args[4:])
 	case args[1] == "user" && args[2] == "create":
 		name := args[3]
 		if _, exists := f.users[name]; exists {
@@ -507,6 +611,105 @@ func (f *Fake) showrepl() string {
 		"\tConnection name: 3b2c9a01-77ef-4c05-8a3d-0f6b41cc9e2a\n" +
 		"\tEnabled        : TRUE\n" +
 		"\tServer DNS name : dc2." + f.realm + "\n"
+}
+
+// passwordSettings renders `domain passwordsettings show` the way samba-tool
+// prints it, from the fake's own policy state.
+func (f *Fake) passwordSettings() string {
+	dn := "DC=" + strings.ReplaceAll(f.realm, ".", ",DC=")
+	return "Password information for domain '" + dn + "'\n\n" +
+		"Password complexity: " + f.policy["complexity"] + "\n" +
+		"Store plaintext passwords: " + f.policy["store-plaintext"] + "\n" +
+		"Password history length: " + f.policy["history-length"] + "\n" +
+		"Minimum password length: " + f.policy["min-pwd-length"] + "\n" +
+		"Minimum password age (days): " + f.policy["min-pwd-age"] + "\n" +
+		"Maximum password age (days): " + f.policy["max-pwd-age"] + "\n" +
+		"Account lockout duration (mins): " + f.policy["account-lockout-duration"] + "\n" +
+		"Account lockout threshold (attempts): " + f.policy["account-lockout-threshold"] + "\n" +
+		"Reset account lockout after (mins): " + f.policy["reset-account-lockout-after"] + "\n"
+}
+
+// setPasswordSetting applies `passwordsettings set --<name>=<value>` to the
+// fake policy, with `default` restoring Samba's default the way the real
+// command does.
+func (f *Fake) setPasswordSetting(flags []string) (string, error) {
+	if len(flags) == 0 {
+		return "", fmt.Errorf("samba-tool: passwordsettings set needs a setting")
+	}
+	for _, flag := range flags {
+		name, value, ok := strings.Cut(strings.TrimPrefix(flag, "--"), "=")
+		if !ok {
+			return "", fmt.Errorf("samba-tool: cannot parse %q", flag)
+		}
+		if _, known := f.policy[name]; !known {
+			return "", fmt.Errorf("samba-tool: no such option: --%s", name)
+		}
+		if value == "default" {
+			value = defaultPolicy()[name]
+		}
+		f.policy[name] = value
+	}
+	return "All changes applied successfully!\n", nil
+}
+
+// provision applies `domain provision` to the fake machine: the sample domain
+// appears under the realm the wizard collected, and the output is shaped the
+// way samba-tool prints it — the generated Admin password line included,
+// because parsing that line is exactly what the result screen does for real.
+func (f *Fake) provision(args []string) (string, error) {
+	if f.provisioned {
+		return "", fmt.Errorf(
+			"ERROR(ldb): uncaught exception - Failed to connect to " +
+				"'sam.ldb': a domain already exists on this machine")
+	}
+	realm, netbios := "", ""
+	for _, arg := range args[3:] {
+		if v, ok := strings.CutPrefix(arg, "--realm="); ok {
+			realm = strings.ToLower(v)
+		}
+		if v, ok := strings.CutPrefix(arg, "--domain="); ok {
+			netbios = strings.ToUpper(v)
+		}
+	}
+	if realm == "" || netbios == "" {
+		return "", fmt.Errorf("samba-tool: provision needs --realm and --domain")
+	}
+
+	// The sample domain, reborn under the given names.
+	populated := NewFake()
+	f.provisioned = true
+	f.realm, f.netbios = realm, netbios
+	f.users, f.groups, f.computers = populated.users, populated.groups, populated.computers
+	f.policy = defaultPolicy()
+	f.records = nil
+	for _, record := range populated.records {
+		record.Data = strings.ReplaceAll(record.Data, "lab.example", realm)
+		record.Data = strings.ReplaceAll(record.Data, "lab", strings.ToLower(netbios))
+		f.records = append(f.records, record)
+	}
+
+	return "Looking up IPv4 addresses\n" +
+		"Setting up secrets.ldb\n" +
+		"Setting up the registry\n" +
+		"Setting up idmap db\n" +
+		"Setting up SAM db\n" +
+		"Setting up sam.ldb partitions and settings\n" +
+		"Pre-loading the Samba 4 and AD schema\n" +
+		"Setting up sam.ldb schema\n" +
+		"Setting up sam.ldb configuration data\n" +
+		"Setting up sam.ldb users and groups\n" +
+		"A Kerberos configuration suitable for Samba AD has been generated " +
+		"at /var/lib/samba/private/krb5.conf\n" +
+		"Merge the contents of this file with your system krb5.conf or " +
+		"replace it with this one. Do not create a symlink!\n" +
+		"Once the above files are installed, your Samba AD server will be " +
+		"ready to use\n" +
+		"Server Role:           active directory domain controller\n" +
+		"Hostname:              " + f.dc + "\n" +
+		"NetBIOS Domain:        " + netbios + "\n" +
+		"DNS Domain:            " + realm + "\n" +
+		"DOMAIN SID:            S-1-5-21-1105176323-2846128086-2745470478\n" +
+		"Admin password:        eiXi4nu3Ooquiet~aiZ0\n", nil
 }
 
 // joinLines renders a list the way samba-tool prints one: one per line.

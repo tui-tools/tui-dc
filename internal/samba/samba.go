@@ -17,13 +17,19 @@
 // and every change is one more subcommand of the same program, previewed in
 // full before it runs.
 //
-// Two things are deliberately absent. No password is ever an argument:
-// samba-tool warns about that itself ("Using passwords on command line is
-// insecure"), and it is right — a command line is visible in `ps` to every
-// user on the machine — so account creation and password resets ask
-// samba-tool for a random password and show what it printed. And nothing here
-// provisions, joins or demotes a domain: those are decisions with no undo, and
-// a terminal UI is the wrong place to take them.
+// One rule holds everywhere: no password is ever an argument. samba-tool
+// warns about that itself ("Using passwords on command line is insecure"),
+// and it is right — a command line is visible in `ps` to every user on the
+// machine — so account creation and password resets ask samba-tool for a
+// random password and show what it printed, and provisioning omits
+// `--adminpass` entirely so samba-tool generates the Administrator password
+// itself and prints it exactly once.
+//
+// Provisioning is the one moment this backend drives a second program:
+// `systemctl enable --now <unit>` is offered — previewed and confirmed like
+// everything else — so the freshly created domain actually starts. Joining
+// and demoting remain absent: both touch a trust relationship with another
+// controller, and a terminal UI on one host is the wrong place to take them.
 //
 // This is the domain controller side of Samba. The file server side —
 // smb.conf, shares, sessions, the password database — is tui-samba, and the
@@ -69,6 +75,10 @@ const DefaultServer = "127.0.0.1"
 // not be held by it forever.
 const readTimeout = 25 * time.Second
 
+// provisionTimeout bounds `domain provision`, which builds a whole directory
+// database and cannot be held to the budget of a read.
+const provisionTimeout = 10 * time.Minute
+
 // Options are the settings the tool passes down from its configuration.
 type Options struct {
 	// Server is what `samba-tool domain info` and `samba-tool dns` are
@@ -92,6 +102,23 @@ type Real struct {
 	// because a DNS command needs it and a reader should not have to retype
 	// the realm already on screen.
 	zone string
+
+	// provisionRun is a second runner over the same samba-tool, with the
+	// timeout provisioning needs. It exists so a ten-minute budget cannot
+	// leak onto ordinary commands.
+	provisionRun *runner.Runner
+	// systemctl drives the one non-samba command this backend offers: the
+	// previewed `systemctl enable --now` after a provision. Nil when
+	// systemctl is not installed, and everything but that offer works
+	// without it.
+	systemctl *runner.Runner
+
+	// loaded, isDC and reachable are what the last Load concluded, kept so
+	// BuildProvision can refuse on a host that already serves a domain even
+	// if a caller never looked at the model.
+	loaded    bool
+	isDC      bool
+	reachable bool
 }
 
 // Available reports whether this machine has a samba-tool to drive.
@@ -132,6 +159,28 @@ func NewReal(opts Options, sudoPrefix []string, caps compat.Caps) (*Real, error)
 		return real, nil
 	}
 	real.run = r
+
+	// The provisioning runner is the same binary, the same escalation, a
+	// longer leash. Building it here cannot fail: r just resolved the same
+	// options.
+	if p, err := runner.New(runner.Options{
+		Bin:         directory.Bin,
+		SearchPaths: searchPaths,
+		SudoPrefix:  sudoPrefix,
+		Timeout:     provisionTimeout,
+		InstallHint: "it comes with the samba package (samba-common-bin on Debian)",
+	}); err == nil {
+		real.provisionRun = p
+	}
+	// systemctl is optional: without it the tool still provisions, and the
+	// user starts the service themselves — the result screen says which one.
+	if s, err := runner.New(runner.Options{
+		Bin:         "systemctl",
+		SearchPaths: []string{"/usr/bin/systemctl", "/bin/systemctl"},
+		SudoPrefix:  sudoPrefix,
+	}); err == nil {
+		real.systemctl = s
+	}
 	return real, nil
 }
 
@@ -158,12 +207,57 @@ func (r *Real) Preview(cmd runner.Command) string {
 	return r.run.Preview(cmd)
 }
 
-// Run executes a previewed command.
+// Run executes a previewed command, routed to the runner that owns its
+// program: systemctl commands to the systemctl runner, a provision to the
+// long-timeout runner, everything else to the ordinary one.
 func (r *Real) Run(ctx context.Context, cmd runner.Command) (string, error) {
+	if len(cmd.Argv) > 0 && cmd.Argv[0] == "systemctl" {
+		if r.systemctl == nil {
+			return "", fmt.Errorf("%w: the systemctl command was not found",
+				ErrNotAvailable)
+		}
+		return r.systemctl.Run(ctx, cmd)
+	}
 	if r.run == nil {
 		return "", r.unavailable()
 	}
+	if directory.IsProvisionCommand(cmd) && r.provisionRun != nil {
+		return r.provisionRun.Run(ctx, cmd)
+	}
 	return r.run.Run(ctx, cmd)
+}
+
+// BuildProvision turns the wizard's answers into a previewable provision. It
+// is refused on a host that already serves a domain: this tool creates, it
+// does not replace.
+func (r *Real) BuildProvision(p directory.Provision) (runner.Command, error) {
+	if r.run == nil {
+		return runner.Command{}, r.unavailable()
+	}
+	if !r.loaded {
+		return runner.Command{}, fmt.Errorf(
+			"the domain has not been read yet, so whether one exists is unknown")
+	}
+	if r.isDC || r.reachable {
+		return runner.Command{}, directory.ErrDomainExists
+	}
+	return directory.BuildProvisionCommand(p)
+}
+
+// EnableServiceCommand is the previewed `systemctl enable --now <unit>`
+// offered after a provision, with the unit name this distribution ships.
+func (r *Real) EnableServiceCommand() (runner.Command, bool) {
+	if r.systemctl == nil {
+		return runner.Command{}, false
+	}
+	unit, ok := DetectDCUnit()
+	if !ok {
+		return runner.Command{}, false
+	}
+	return runner.Command{
+		Argv:        []string{"systemctl", "enable", "--now", unit},
+		Description: "Enable and start " + unit,
+	}, true
 }
 
 // unavailable is the one error every path takes on a machine with no
@@ -200,6 +294,7 @@ type readFunc func(ctx context.Context, args ...string) (string, error)
 func (r *Real) Load(ctx context.Context) (directory.Model, error) {
 	model, zone := loadDomain(ctx, r.read, r.opts.Server)
 	r.zone = zone
+	r.loaded, r.isDC, r.reachable = true, model.Domain.IsDC(), model.Reachable
 	return model, nil
 }
 
@@ -254,6 +349,19 @@ func loadDomain(ctx context.Context, read readFunc, server string) (directory.Mo
 	} else {
 		model.Domain.ForestLevel, model.Domain.DomainLevel,
 			model.Domain.LowestLevel = ParseDomainLevel(out)
+	}
+
+	// The password policy is only readable where there is a directory to ask,
+	// which is a controller. On any other machine the command would fail with
+	// a reason less true than "this host is not a domain controller", which
+	// the role line already says.
+	if model.Domain.IsDC() {
+		if out, err := read(ctx, "domain", "passwordsettings", "show"); err != nil {
+			model.Notes = append(model.Notes,
+				"passwordsettings: "+runner.FirstLine(err.Error()))
+		} else {
+			model.Policy = ParsePasswordSettings(out)
+		}
 	}
 
 	zone := strings.ToLower(firstNonEmpty(model.Domain.Realm, model.Domain.Forest))
