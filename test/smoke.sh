@@ -98,6 +98,16 @@ check "demo replication reports the failing partition" \
   "$bin --demo --check | grep -c '\"ok\": false'" \
   '^[1-9]'
 
+check "demo reads the password policy" \
+  "$bin --demo --check | grep '\"passwordPolicyRead\"'" \
+  'true'
+
+# --demo-fresh is the machine the provision wizard exists for: samba-tool
+# installed, no domain behind it. The read path must say exactly that.
+check "fresh demo has samba-tool and no domain" \
+  "$bin --demo-fresh --check | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[\"installed\"], d[\"isDomainController\"], d[\"domainReachable\"])'" \
+  '^True False False$'
+
 # --- the real read path ----------------------------------------------------
 if ! command -v samba-tool >/dev/null 2>&1; then
   skip "check reports a machine with no samba-tool" "samba-tool is not installed"

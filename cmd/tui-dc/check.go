@@ -70,6 +70,10 @@ type checkReport struct {
 	Computers int `json:"computers"`
 	Records   int `json:"dnsRecords"`
 
+	// PasswordPolicyRead reports that `domain passwordsettings show` ran and
+	// was parsed. It is only attempted on a domain controller.
+	PasswordPolicyRead bool `json:"passwordPolicyRead"`
+
 	// ZoneRead and ReplicationRead report that those two commands ran at all,
 	// so an empty zone and an unqueryable one do not look the same.
 	ZoneRead        bool `json:"zoneRead"`
@@ -119,32 +123,33 @@ func runCheck(backend directory.Backend, backendCompat compat.Result,
 
 	counts := model.Count()
 	report := checkReport{
-		Tool:            toolName,
-		Version:         version,
-		Backend:         backend.Name(),
-		Describe:        backend.Describe(),
-		Installed:       model.Installed,
-		Detail:          model.Detail,
-		SambaVersion:    model.Version,
-		Reachable:       model.Reachable,
-		IsDC:            model.Domain.IsDC(),
-		Role:            model.Domain.ServerRole,
-		Realm:           model.Domain.Realm,
-		NetBIOS:         model.Domain.NetBIOS,
-		DCName:          model.Domain.DCName,
-		ForestLevel:     model.Domain.ForestLevel,
-		DomainLevel:     model.Domain.DomainLevel,
-		DNSBackend:      model.Domain.DNSBackend,
-		Users:           counts.Users,
-		Groups:          counts.Groups,
-		Computers:       counts.Computers,
-		Records:         counts.Records,
-		ZoneRead:        model.Zone.Read,
-		ReplicationRead: model.Repl.Read,
-		ReplicationOK:   model.Repl.OK(),
-		Notes:           model.Notes,
-		Compat:          backendCompat,
-		Model:           model,
+		Tool:               toolName,
+		Version:            version,
+		Backend:            backend.Name(),
+		Describe:           backend.Describe(),
+		Installed:          model.Installed,
+		Detail:             model.Detail,
+		SambaVersion:       model.Version,
+		Reachable:          model.Reachable,
+		IsDC:               model.Domain.IsDC(),
+		Role:               model.Domain.ServerRole,
+		Realm:              model.Domain.Realm,
+		NetBIOS:            model.Domain.NetBIOS,
+		DCName:             model.Domain.DCName,
+		ForestLevel:        model.Domain.ForestLevel,
+		DomainLevel:        model.Domain.DomainLevel,
+		DNSBackend:         model.Domain.DNSBackend,
+		Users:              counts.Users,
+		Groups:             counts.Groups,
+		Computers:          counts.Computers,
+		Records:            counts.Records,
+		PasswordPolicyRead: model.Policy.Read,
+		ZoneRead:           model.Zone.Read,
+		ReplicationRead:    model.Repl.Read,
+		ReplicationOK:      model.Repl.OK(),
+		Notes:              model.Notes,
+		Compat:             backendCompat,
+		Model:              model,
 	}
 
 	for _, user := range model.Users {

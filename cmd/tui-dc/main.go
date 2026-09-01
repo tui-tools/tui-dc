@@ -7,9 +7,14 @@
 // of it without changing anything. Every change is one `samba-tool` command,
 // shown in full and confirmed before it runs.
 //
-// It does not provision, join or demote a domain. Those have no undo, they are
-// rare, and their command lines are worth reading in a shell where they can be
-// checked twice.
+// On a machine that has samba-tool and no domain, it can create one: the
+// provision wizard collects the realm, the NetBIOS name, the DNS backend and
+// an optional forwarder, previews the exact `samba-tool domain provision`
+// command — with no `--adminpass` in it, so samba-tool generates the
+// Administrator password itself and prints it exactly once — and asks for the
+// realm to be typed back before it will run. It still does not join or demote
+// a domain: both touch a trust relationship with another controller, and are
+// worth reading in a shell where they can be checked twice.
 package main
 
 import (
@@ -51,6 +56,7 @@ func defaults() map[string]string {
 // options holds the parsed command line.
 type options struct {
 	demo        bool
+	demoFresh   bool
 	check       bool
 	report      bool
 	server      string
@@ -69,6 +75,8 @@ func parseFlags(args []string, out *os.File) (options, error) {
 	fs.SetOutput(out)
 	fs.BoolVar(&opts.demo, "demo", false,
 		"run against a sample domain, without touching anything")
+	fs.BoolVar(&opts.demoFresh, "demo-fresh", false,
+		"like --demo, but before a domain exists: walk the provision wizard")
 	fs.BoolVar(&opts.check, "check", false,
 		"run the read path once and print what it parsed as JSON, then exit "+
 			"(no UI, no changes: safe to run anywhere, including in CI)")
@@ -96,6 +104,11 @@ func parseFlags(args []string, out *os.File) (options, error) {
 			opts.sudoSet = true
 		}
 	})
+	// --demo-fresh is a flavour of --demo, so everything that asks "is this a
+	// demo" keeps asking one question.
+	if opts.demoFresh {
+		opts.demo = true
+	}
 	return opts, nil
 }
 
@@ -182,6 +195,9 @@ func applyOverrides(cfg *config.Config, opts options) {
 // pickBackend returns the demo backend or the real one.
 func pickBackend(cfg config.Config, opts options,
 	backendCompat compat.Result) (directory.Backend, error) {
+	if opts.demoFresh {
+		return samba.NewFakeFresh(), nil
+	}
 	if opts.demo {
 		return samba.NewFake(), nil
 	}

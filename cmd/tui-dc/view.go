@@ -40,6 +40,10 @@ func (a *app) View() string {
 	case modeHelp:
 		return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center,
 			ui.HelpScreen(a.theme, "tui-dc — keys", a.helpKeys(), a.width))
+	case modeWizard:
+		return a.wizardView()
+	case modeNotice:
+		return a.noticeView()
 	case modeDetail:
 		return a.detailView()
 	default:
@@ -228,19 +232,27 @@ func (a *app) domainFacts() []factRow {
 	unknown := func(value string) factRow {
 		return factRow{value: firstNonEmpty(value, "unknown"), note: value == ""}
 	}
-	rows := []factRow{
-		{label: "realm", value: firstNonEmpty(d.Realm, "unknown"), note: d.Realm == ""},
-		{label: "forest", value: firstNonEmpty(d.Forest, d.Realm, "unknown"),
-			note: d.Forest == "" && d.Realm == ""},
-		{label: "netbios domain", value: firstNonEmpty(d.NetBIOS, "unknown"),
-			note: d.NetBIOS == ""},
-		{label: "this host's role",
-			value: firstNonEmpty(d.ServerRole, "unknown"), note: !d.IsDC()},
-		{label: "answering DC",
-			value: firstNonEmpty(d.DCName, "none answered"), note: d.DCName == ""},
-		{label: "server site", value: firstNonEmpty(d.ServerSite, "unknown"),
-			note: d.ServerSite == ""},
+	var rows []factRow
+	// A machine with samba-tool and no domain is what the provision wizard is
+	// for, and the offer is the first line of the screen rather than a key
+	// hidden in the help.
+	if a.provisionOffered() {
+		rows = append(rows, factRow{label: "no domain",
+			value: "press P to provision a new domain on this host", note: true})
 	}
+	rows = append(rows,
+		factRow{label: "realm", value: firstNonEmpty(d.Realm, "unknown"), note: d.Realm == ""},
+		factRow{label: "forest", value: firstNonEmpty(d.Forest, d.Realm, "unknown"),
+			note: d.Forest == "" && d.Realm == ""},
+		factRow{label: "netbios domain", value: firstNonEmpty(d.NetBIOS, "unknown"),
+			note: d.NetBIOS == ""},
+		factRow{label: "this host's role",
+			value: firstNonEmpty(d.ServerRole, "unknown"), note: !d.IsDC()},
+		factRow{label: "answering DC",
+			value: firstNonEmpty(d.DCName, "none answered"), note: d.DCName == ""},
+		factRow{label: "server site", value: firstNonEmpty(d.ServerSite, "unknown"),
+			note: d.ServerSite == ""},
+	)
 	if d.ClientSite != "" && d.ClientSite != d.ServerSite {
 		rows = append(rows, factRow{label: "client site", value: d.ClientSite, note: true})
 	}
@@ -256,6 +268,21 @@ func (a *app) domainFacts() []factRow {
 		factRow{label: "samba-tool", value: firstNonEmpty(a.model.Version, "not installed"),
 			note: !a.model.Installed},
 	)
+
+	// The password policy is part of the domain screen because it is a fact
+	// about the domain, and the editable rows carry the flag the edit key
+	// builds its command from.
+	if a.model.Policy.Read {
+		rows = append(rows, factRow{label: "password policy",
+			value: "one samba-tool setting per row — e edits the selected one"})
+		for _, setting := range a.model.Policy.Settings {
+			rows = append(rows, factRow{
+				label:  "  " + strings.ToLower(setting.Label),
+				value:  setting.Value,
+				policy: setting.Name,
+			})
+		}
+	}
 
 	// The notes are part of the domain screen rather than hidden behind a key:
 	// a read that half failed is the most important thing on it.
@@ -648,6 +675,9 @@ func (a *app) shortHelpKeys() []ui.KeyHint {
 	if a.screen != directory.ScreenDomain && a.screen != directory.ScreenRepl {
 		hints = append(hints, ui.KeyHint{Key: "enter", Desc: "detail"})
 	}
+	if a.screen == directory.ScreenDomain && a.provisionOffered() {
+		hints = append(hints, ui.KeyHint{Key: "P", Desc: "provision"})
+	}
 	for _, spec := range directory.ActionsFor(a.screen) {
 		hints = append(hints, ui.KeyHint{
 			Key: spec.Key, Desc: strings.ToLower(shortLabel(spec.Label))})
@@ -694,6 +724,9 @@ func (a *app) helpKeys() []ui.KeyHint {
 	}
 	return append(hints,
 		ui.KeyHint{Key: "", Desc: ""},
+		ui.KeyHint{Key: "P",
+			Desc: "on the domain screen of a host with no domain: provision one " +
+				"(a wizard, ending in the usual previewed command)"},
 		ui.KeyHint{Key: "r", Desc: "re-read the domain"},
 		ui.KeyHint{Key: "?", Desc: "this help"},
 		ui.KeyHint{Key: "q", Desc: "quit"},

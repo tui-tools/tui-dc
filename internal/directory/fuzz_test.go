@@ -128,10 +128,11 @@ func FuzzBuildCommand(f *testing.F) {
 // subcommand nouns and their verbs. Anything else in an argv came from the
 // input, and the target above checks exactly that.
 var knownWords = map[string]bool{
-	Bin: true, "user": true, "group": true, "dns": true,
+	Bin: true, "user": true, "group": true, "dns": true, "domain": true,
 	"create": true, "delete": true, "enable": true, "disable": true,
 	"setpassword": true, "setexpiry": true, "add": true,
 	"addmembers": true, "removemembers": true,
+	"passwordsettings": true, "set": true,
 }
 
 // isKnownWord reports one of those.
