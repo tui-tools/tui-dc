@@ -190,6 +190,5 @@
     "kerberos",
     "dns",
     "samba-tool"
-  ],
-  "unreleased": true
+  ]
 }
