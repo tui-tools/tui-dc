@@ -223,7 +223,7 @@ pkgs.tui.tools.
 ### Any distribution, static binary — coming soon
 
 ```sh
-curl -fsSL https://github.com/tui-tools/tui-dc/releases/download/v0.2.0/tui-dc_0.2.0_linux_amd64.tar.gz | tar -xz tui-dc
+curl -fsSL https://github.com/tui-tools/tui-dc/releases/download/v0.2.1/tui-dc_0.2.1_linux_amd64.tar.gz | tar -xz tui-dc
 sudo install -m0755 tui-dc /usr/local/bin/tui-dc
 ```
 
