@@ -28,11 +28,22 @@
 // — use the machine account this host already has, with samba-tool's `-P`; see
 // directory.MachineAccountFlag.
 //
-// Provisioning is the one moment this backend drives a second program:
-// `systemctl enable --now <unit>` is offered — previewed and confirmed like
-// everything else — so the freshly created domain actually starts. Joining
-// and demoting remain absent: both touch a trust relationship with another
-// controller, and a terminal UI on one host is the wrong place to take them.
+// Provisioning is the one moment this backend drives other programs. Three of
+// them, one previewed command each, because a domain controller that cannot be
+// reached is not a domain controller:
+//
+//	mv …/smb.conf …/smb.conf.orig    the distribution's configuration, which
+//	                                 provision refuses to start beside
+//	install … /etc/krb5.conf.d/…     the Kerberos configuration provision
+//	                                 generated, which an MIT KDC build needs
+//	                                 before the unit will start at all
+//	systemctl enable --now <unit>    the daemon itself
+//
+// Each is offered, previewed and confirmed like everything else, and the two
+// checks that decide whether the first is needed run before the wizard asks
+// anything — see preflight.go. Joining and demoting remain absent: both touch a
+// trust relationship with another controller, and a terminal UI on one host is
+// the wrong place to take them.
 //
 // This is the domain controller side of Samba. The file server side —
 // smb.conf, shares, sessions, the password database — is tui-samba, and the
@@ -110,11 +121,10 @@ type Real struct {
 	// timeout provisioning needs. It exists so a ten-minute budget cannot
 	// leak onto ordinary commands.
 	provisionRun *runner.Runner
-	// systemctl drives the one non-samba command this backend offers: the
-	// previewed `systemctl enable --now` after a provision. Nil when
-	// systemctl is not installed, and everything but that offer works
-	// without it.
-	systemctl *runner.Runner
+	// helpers are the runners for the few non-samba programs this backend
+	// offers, one previewed command each — see helperBins. A missing one is
+	// not fatal: everything but that one offer works without it.
+	helpers map[string]*runner.Runner
 
 	// loaded, isDC and reachable are what the last Load concluded, kept so
 	// BuildProvision can refuse on a host that already serves a domain even
@@ -175,16 +185,37 @@ func NewReal(opts Options, sudoPrefix []string, caps compat.Caps) (*Real, error)
 	}); err == nil {
 		real.provisionRun = p
 	}
-	// systemctl is optional: without it the tool still provisions, and the
-	// user starts the service themselves — the result screen says which one.
-	if s, err := runner.New(runner.Options{
-		Bin:         "systemctl",
-		SearchPaths: []string{"/usr/bin/systemctl", "/bin/systemctl"},
-		SudoPrefix:  sudoPrefix,
-	}); err == nil {
-		real.systemctl = s
+	// The helpers are optional: without systemctl the tool still provisions and
+	// the user starts the service themselves, and a condition whose fix cannot
+	// be built is stated instead of offered. The result and preflight screens
+	// say so either way.
+	real.helpers = map[string]*runner.Runner{}
+	for bin, paths := range helperBins {
+		if h, err := runner.New(runner.Options{
+			Bin:         bin,
+			SearchPaths: paths,
+			SudoPrefix:  sudoPrefix,
+		}); err == nil {
+			real.helpers[bin] = h
+		}
 	}
 	return real, nil
+}
+
+// helperBins are the non-samba programs this backend may be asked to run. Each
+// one exists for exactly one previewed command, and the list is the whole set:
+//
+//	systemctl   enable and start the AD DC unit after a provision
+//	mv          move a distribution's smb.conf out of provision's way
+//	install     drop the generated Kerberos configuration into /etc/krb5.conf.d
+//
+// They are separate runners rather than one shell line because a shell line is
+// not a command a user can check: argv[0] is what routes, and what the confirm
+// dialog showed is what the runner executes.
+var helperBins = map[string][]string{
+	"systemctl": {"/usr/bin/systemctl", "/bin/systemctl"},
+	"mv":        {"/usr/bin/mv", "/bin/mv"},
+	"install":   {"/usr/bin/install", "/bin/install"},
 }
 
 // Name identifies the backend. The manifest declares one block, `samba`, for
@@ -213,15 +244,18 @@ func (r *Real) Preview(cmd runner.Command) string {
 }
 
 // Run executes a previewed command, routed to the runner that owns its
-// program: systemctl commands to the systemctl runner, a provision to the
-// long-timeout runner, everything else to the ordinary one.
+// program: a helper command to its own runner, a provision to the long-timeout
+// runner, everything else to the ordinary one.
 func (r *Real) Run(ctx context.Context, cmd runner.Command) (string, error) {
-	if len(cmd.Argv) > 0 && cmd.Argv[0] == "systemctl" {
-		if r.systemctl == nil {
-			return "", fmt.Errorf("%w: the systemctl command was not found",
-				ErrNotAvailable)
+	if len(cmd.Argv) > 0 {
+		if _, isHelper := helperBins[cmd.Argv[0]]; isHelper {
+			helper := r.helpers[cmd.Argv[0]]
+			if helper == nil {
+				return "", fmt.Errorf("%w: the %s command was not found",
+					ErrNotAvailable, cmd.Argv[0])
+			}
+			return helper.Run(ctx, cmd)
 		}
-		return r.systemctl.Run(ctx, cmd)
 	}
 	if r.run == nil {
 		return "", r.unavailable()
@@ -249,10 +283,42 @@ func (r *Real) BuildProvision(p directory.Provision) (runner.Command, error) {
 	return directory.BuildProvisionCommand(p)
 }
 
+// ProvisionPreflight reports what would stop a provision on this host. The
+// facts are read off the filesystem rather than from a command, so it answers
+// on a machine where nothing can be escalated.
+func (r *Real) ProvisionPreflight(serverRole string) directory.Preflight {
+	preflight := ProvisionPreflight(serverRole)
+	// A fix that cannot be run must not be offered. Without the program behind
+	// it the condition is still true and still worth naming, which is what
+	// dropping only the command does.
+	for i := range preflight.Conditions {
+		fix := preflight.Conditions[i].Fix
+		if fix == nil || len(fix.Argv) == 0 {
+			continue
+		}
+		if r.helpers[fix.Argv[0]] == nil {
+			preflight.Conditions[i].Fix = nil
+			preflight.Conditions[i].Detail = append(preflight.Conditions[i].Detail,
+				"", "The "+fix.Argv[0]+" command was not found on this machine, "+
+					"so the move is yours to make in a shell.")
+		}
+	}
+	return preflight
+}
+
+// Krb5DropInCommand is the previewed install of the generated Kerberos
+// configuration, offered only where this host needs it and can run it.
+func (r *Real) Krb5DropInCommand(generated string) (runner.Command, bool) {
+	if r.helpers["install"] == nil {
+		return runner.Command{}, false
+	}
+	return Krb5DropIn(generated)
+}
+
 // EnableServiceCommand is the previewed `systemctl enable --now <unit>`
 // offered after a provision, with the unit name this distribution ships.
 func (r *Real) EnableServiceCommand() (runner.Command, bool) {
-	if r.systemctl == nil {
+	if r.helpers["systemctl"] == nil {
 		return runner.Command{}, false
 	}
 	unit, ok := DetectDCUnit()

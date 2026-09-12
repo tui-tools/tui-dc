@@ -28,10 +28,12 @@ make demo     # a sample domain, on a machine with no Samba on it
 ```
 
 On a machine that has `samba-tool` and no domain, the domain screen offers one:
-`P` opens the provision wizard — realm, NetBIOS name, DNS backend, optional
-forwarder — and ends in the same previewed, confirmed command as every other
-change, gated by typing the realm back. Run `tui-dc --demo-fresh` to walk it
-against a fake machine.
+`P` runs a preflight and then opens the provision wizard — realm, NetBIOS name,
+DNS backend, optional forwarder, the address this controller serves — and ends
+in the same previewed, confirmed command as every other change, gated by typing
+the realm back. What follows is a short chain of previewed steps that ends with
+a controller that is actually serving. Run `tui-dc --demo-fresh` to walk the
+whole thing against a fake machine.
 
 ## No password ever reaches a command line
 
@@ -57,8 +59,35 @@ tool is built around and the first thing a new action would break.
 ## Provisioning a domain
 
 When the read finds `samba-tool` but no domain — `smb.conf` does not say this
-host is a domain controller — the domain screen says so and `P` opens the
-wizard:
+host is a domain controller — the domain screen says so and `P` starts.
+
+### The preflight
+
+Two conditions decide whether provisioning can work at all, and both used to be
+found late: one after the realm had been typed twice and the command confirmed,
+the other most of the way into a provision that then died in a Python traceback.
+They are checked before the first question, and a host where neither holds sees
+no extra screen — the wizard opens exactly as it did before.
+
+- **A distribution's own `/etc/samba/smb.conf`.** Fedora's `samba` package ships
+  one with `security = user`, which `testparm` resolves to `server role = auto`,
+  and provision refuses to start unless the resolved role is already the DC one.
+  The tool offers the way out as a previewed command like any other change:
+  `mv /etc/samba/smb.conf /etc/samba/smb.conf.orig`. Provision then writes its
+  own — which is also why the confirm says plainly that a file server's
+  configuration is what is being moved aside. If `smb.conf.orig` already exists
+  the file is **not** moved: the tool says so and leaves that one to you, because
+  one previewed command must never overwrite a saved configuration.
+- **The AD provisioning data.** `samba-tool` comes from one package and the AD
+  schema from another, and without the schema provision fails part of the way in
+  on a missing `.ldf` file. A `stat` of `/usr/share/samba/setup/ad-schema/`
+  answers it first. On Fedora and RHEL the packages are `samba-dc-provision` and
+  `samba-dc`, verified with `dnf provides`; on a distribution whose package names
+  have not been verified the tool names the missing path and says it does not
+  know the package rather than guessing. Nothing is offered to confirm either
+  way: installing packages is not this tool's job.
+
+### The wizard
 
 1. **Realm** — the domain's DNS name (`lab.example`), validated as one.
 2. **NetBIOS domain** — the short name, prefilled from the realm's first label.
@@ -67,13 +96,48 @@ wizard:
    provision` has no forwarder flag, so it reaches samba as the smb.conf
    parameter it is: one `--option=dns forwarder=…` argument, quoted in the
    preview because its parameter name carries a space.
-5. **Type the realm back** — a provision decides everything after it, so it
+5. **The address this controller serves** — a picker over this host's own IPv4
+   addresses, the one on the default route preselected, skipped entirely when
+   there is only one. Left unanswered, samba picks an address itself and only
+   warns about it, and the address it picked is what goes into the DC's own A
+   record — the record every member of the domain resolves. It becomes
+   `--host-ip=…`, and it decides one more thing without asking: the controller is
+   bound to the interface that owns it plus loopback
+   (`--option=interfaces=lo <iface>`, `--option=bind interfaces only=yes`), so
+   the internal DNS server claims port 53 only there. On a host where libvirt's
+   or a docker bridge's dnsmasq already holds it elsewhere, a controller that
+   tried every address would never start.
+6. **Type the realm back** — a provision decides everything after it, so it
    gets a second, deliberate confirmation before the usual command preview.
 
-After the command runs, the result screen shows the one-time password, the
-krb5.conf note samba-tool printed, and offers the previewed
-`systemctl enable --now samba-ad-dc.service` (or `samba.service` — the unit is
-detected per distribution) so the new controller actually starts.
+The addresses are read in pure Go — `net.Interfaces`, plus an unconnected UDP
+socket toward a documentation address to learn which source address the kernel
+would use. No command runs to answer a question.
+
+### After it runs
+
+The result screen shows the one-time Administrator password, the facts provision
+summarised, and the WARNING lines it printed — that is where "More than one IPv4
+address found" and "No IPv6 address will be assigned" appear, and they are facts
+about the domain that was just created.
+
+Then it offers the follow-ups as an ordered chain, one preview and one confirm
+each, in the order that ends with a running controller:
+
+1. `install -m 644 /var/lib/samba/private/krb5.conf /etc/krb5.conf.d/samba-dc.conf`
+   — only where the host has that include directory and its `/etc/krb5.conf`
+   sets no `default_realm` of its own. On a samba built against the MIT KDC,
+   which is Fedora's build, the KDC reads `/etc/krb5.conf`, and Fedora ships it
+   with `default_realm` commented out: without this the unit exits at startup
+   with nothing in the journal but `mitkdc child process exited`. Where the
+   drop-in does not apply, the screen keeps the old note — merge the generated
+   file yourself, and do not symlink it.
+2. `systemctl enable --now samba-ad-dc.service` (or `samba.service` — the unit is
+   detected per distribution), which starts the controller.
+
+A provision that fails gets the same full-screen notice a successful one does,
+with the tail of its transcript: it prints hundreds of lines before it fails and
+the reason is in them, which a single status line could not show.
 
 The wizard is refused, at the key and again in the backend, on a host that
 already serves a domain: this tool creates a domain, it does not replace one.
@@ -92,7 +156,7 @@ It is also not a file server tool. The Samba on a domain controller also serves
 
 | Screen | What it reads | What it can change |
 | --- | --- | --- |
-| **domain** | `domain info`, `domain level show`, `testparm`, `domain passwordsettings show` | provision a new domain (P, when none exists), edit a password-policy setting (e) |
+| **domain** | `domain info`, `domain level show`, `testparm`, `domain passwordsettings show` | provision a new domain (P, when none exists — preflight, wizard and the follow-up steps), edit a password-policy setting (e) |
 | **users** | `user list`, then `user show` per row | create, delete, enable, suspend, reset password, set expiry |
 | **groups** | `group list`, then `group listmembers` per row | create, delete, add member, remove member |
 | **computers** | `computer list`, then `computer show` per row | nothing yet |

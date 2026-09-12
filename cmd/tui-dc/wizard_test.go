@@ -1,14 +1,59 @@
 package main
 
 import (
+	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/tui-tools/tui-dc/internal/directory"
 	"github.com/tui-tools/tui-dc/internal/samba"
 	"github.com/tui-tools/tui-kit/compat"
+	"github.com/tui-tools/tui-kit/runner"
 	"github.com/tui-tools/tui-kit/theme"
+	"github.com/tui-tools/tui-kit/ui"
 )
+
+// twoAddressHost is the host the address step exists for: the address it is
+// reached on, and a bridge. The wizard's address reads are stubbed with it so
+// no test depends on the interfaces of the machine running it.
+func twoAddressHost() []directory.HostAddress {
+	return []directory.HostAddress{
+		{IP: "192.168.10.20", Iface: "eth0"},
+		{IP: "192.168.122.1", Iface: "virbr0"},
+	}
+}
+
+// stubHostAddresses holds a set of addresses still for one test.
+func stubHostAddresses(t *testing.T, addrs []directory.HostAddress) {
+	t.Helper()
+	previous := readHostAddresses
+	readHostAddresses = func() []directory.HostAddress { return addrs }
+	t.Cleanup(func() { readHostAddresses = previous })
+}
+
+// clearPreflight walks the preflight the fresh fake machine reports — the
+// distribution's smb.conf in provision's way — and leaves the app on the browse
+// screen with nothing in the way of the wizard.
+func clearPreflight(t *testing.T, a *app) {
+	t.Helper()
+	press(t, a, "P")
+	if a.mode != modeNotice {
+		t.Fatalf("P did not open the preflight screen (mode %d)", a.mode)
+	}
+	press(t, a, "enter")
+	if a.mode != modeConfirm {
+		t.Fatalf("the preflight did not offer its command (mode %d)", a.mode)
+	}
+	press(t, a, "y")
+	if a.mode != modeNotice {
+		t.Fatalf("the preflight screen did not come back (mode %d)", a.mode)
+	}
+	press(t, a, "enter")
+	if a.mode != modeBrowse {
+		t.Fatalf("the preflight screen did not close (mode %d)", a.mode)
+	}
+}
 
 // newFreshTestApp builds the app around a machine with samba-tool and no
 // domain — what --demo-fresh shows.
@@ -34,10 +79,19 @@ func newFreshTestApp(t *testing.T) (*app, *samba.Fake) {
 // and the previewed systemctl step after it.
 func TestProvisionWizardEndToEnd(t *testing.T) {
 	a, fake := newFreshTestApp(t)
+	stubHostAddresses(t, twoAddressHost())
 
 	// The offer is on the screen, not only in the help.
 	if !strings.Contains(a.View(), "press P to provision") {
 		t.Error("the domain screen does not offer the wizard")
+	}
+
+	clearPreflight(t, a)
+	// The preflight's previewed move is already on the record, so everything
+	// below counts the commands the wizard itself caused.
+	cleared := len(fake.Commands())
+	if cleared != 1 {
+		t.Fatalf("the preflight ran %+v, want exactly the move", fake.Commands())
 	}
 
 	press(t, a, "P")
@@ -69,7 +123,21 @@ func TestProvisionWizardEndToEnd(t *testing.T) {
 	// Step 4: the forwarder.
 	typeInto(t, a, "10.0.0.1")
 	press(t, a, "enter")
-	// Step 5: the typed-realm gate refuses anything but the realm.
+	// Step 5: the address, with the one on the default route preselected and
+	// the second one a keystroke away.
+	if a.wizard.step != wizAddress {
+		t.Fatalf("the wizard did not reach the address step (step %d)", a.wizard.step)
+	}
+	if got := a.wizard.picker.Selected(); got != "192.168.10.20 on eth0" {
+		t.Errorf("the picker opened on %q, not on the default route's address", got)
+	}
+	press(t, a, "down")
+	press(t, a, "enter")
+	if a.wizard.p.HostIP != "192.168.122.1" || a.wizard.p.Iface != "virbr0" {
+		t.Fatalf("the address step collected %q on %q",
+			a.wizard.p.HostIP, a.wizard.p.Iface)
+	}
+	// Step 6: the typed-realm gate refuses anything but the realm.
 	if a.wizard.step != wizTyped {
 		t.Fatalf("the wizard did not reach the deliberate step (step %d)", a.wizard.step)
 	}
@@ -90,10 +158,12 @@ func TestProvisionWizardEndToEnd(t *testing.T) {
 	// shows is still a line a reader could paste into a shell.
 	wantArgv := "samba-tool domain provision --realm=CORP.INTERNAL --domain=CORP " +
 		"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
-		"--option=dns forwarder=10.0.0.1"
+		"--host-ip=192.168.122.1 --option=interfaces=lo virbr0 " +
+		"--option=bind interfaces only=yes --option=dns forwarder=10.0.0.1"
 	wantPreview := "samba-tool domain provision --realm=CORP.INTERNAL --domain=CORP " +
 		"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
-		"'--option=dns forwarder=10.0.0.1'"
+		"--host-ip=192.168.122.1 '--option=interfaces=lo virbr0' " +
+		"'--option=bind interfaces only=yes' '--option=dns forwarder=10.0.0.1'"
 	if a.confirm.Command != wantPreview {
 		t.Fatalf("the dialog shows %q\n want %q", a.confirm.Command, wantPreview)
 	}
@@ -103,19 +173,19 @@ func TestProvisionWizardEndToEnd(t *testing.T) {
 	if strings.Contains(a.confirm.Command, "adminpass") {
 		t.Error("an adminpass reached the previewed command line")
 	}
-	if len(fake.Commands()) != 0 {
+	if len(fake.Commands()) != cleared {
 		t.Fatal("something ran before the dialog was answered")
 	}
 
 	press(t, a, "y")
 	ran := fake.Commands()
-	if len(ran) != 1 || ran[0].String() != wantArgv {
+	if len(ran) != cleared+1 || ran[cleared].String() != wantArgv {
 		t.Fatalf("ran %+v, want exactly the previewed command", ran)
 	}
 	// Nothing but quoting separates the two: the preview renders the argv that
 	// ran, it does not build a second command line.
-	if a.backend.Preview(ran[0]) != wantPreview {
-		t.Errorf("the command that ran previews as %q", a.backend.Preview(ran[0]))
+	if a.backend.Preview(ran[cleared]) != wantPreview {
+		t.Errorf("the command that ran previews as %q", a.backend.Preview(ran[cleared]))
 	}
 
 	// The result screen shows the password samba-tool printed, once.
@@ -129,12 +199,38 @@ func TestProvisionWizardEndToEnd(t *testing.T) {
 	if !strings.Contains(view, "krb5.conf") {
 		t.Error("the result screen does not carry the krb5.conf note")
 	}
+	// The warnings provision printed are on the screen: they are facts about
+	// the domain that was just created and are shown nowhere else. The address
+	// was answered, so samba had nothing to choose and said nothing about it.
+	if !strings.Contains(view, "No IPv6 address will be assigned") {
+		t.Error("the result screen does not show samba's warnings")
+	}
+	if strings.Contains(view, "More than one IPv4 address") {
+		t.Error("a provision that was told its address still warned about one")
+	}
 	if !a.model.Domain.IsDC() || a.model.Domain.Realm != "corp.internal" {
 		t.Errorf("the reload under the notice did not see the domain: %+v",
 			a.model.Domain)
 	}
 
-	// Enter offers the previewed systemctl step; confirming runs exactly it.
+	// The follow-ups are a chain, in the order that ends with a running DC: the
+	// Kerberos drop-in first, because on a samba built against the MIT KDC the
+	// unit does not start without it, and the unit second.
+	press(t, a, "enter")
+	if a.mode != modeConfirm {
+		t.Fatalf("the notice did not offer the Kerberos step (mode %d)", a.mode)
+	}
+	wantKrb5 := "install -m 644 /var/lib/samba/private/krb5.conf " +
+		"/etc/krb5.conf.d/samba-dc.conf"
+	if a.confirm.Command != wantKrb5 {
+		t.Fatalf("the first step shows %q\n want %q", a.confirm.Command, wantKrb5)
+	}
+	press(t, a, "y")
+	if a.mode != modeNotice {
+		t.Fatalf("the screen did not come back with the step that was left "+
+			"(mode %d)", a.mode)
+	}
+
 	press(t, a, "enter")
 	if a.mode != modeConfirm {
 		t.Fatalf("the notice did not offer the service step (mode %d)", a.mode)
@@ -144,9 +240,202 @@ func TestProvisionWizardEndToEnd(t *testing.T) {
 	}
 	press(t, a, "y")
 	ran = fake.Commands()
-	last := ran[len(ran)-1]
-	if last.String() != "systemctl enable --now samba-ad-dc.service" {
-		t.Errorf("the service step ran %q", last.String())
+	if got := ran[len(ran)-1].String(); got !=
+		"systemctl enable --now samba-ad-dc.service" {
+		t.Errorf("the service step ran %q", got)
+	}
+	if got := ran[len(ran)-2].String(); got != wantKrb5 {
+		t.Errorf("the step before the unit was %q, not the Kerberos drop-in", got)
+	}
+	// And the unit started, which on this fake machine it only does once the
+	// generated Kerberos configuration is in place.
+	if a.statusKind == ui.StatusError {
+		t.Errorf("the unit did not start: %s", a.status)
+	}
+}
+
+// TestPreflightNamesBothConditionsAndOffersOnlyWhatItCanRun is the preflight
+// from the UI's side: both conditions on the screen, one previewed command for
+// the one the tool can clear, and nothing offered for the missing package.
+func TestPreflightNamesBothConditionsAndOffersOnlyWhatItCanRun(t *testing.T) {
+	a, fake := newFreshTestApp(t)
+	a.backend = &preflightBackend{
+		Backend: a.backend,
+		preflight: directory.Preflight{Conditions: []directory.PreflightCondition{
+			{
+				Title:   "/etc/samba/smb.conf configures this host as auto",
+				Detail:  []string{"provision will not start beside it."},
+				Fix:     &runner.Command{Argv: []string{"mv", "/etc/samba/smb.conf", "/etc/samba/smb.conf.orig"}, Description: "Move /etc/samba/smb.conf aside"},
+				FixBody: "provision writes its own.",
+			},
+			{
+				Title:  "the AD provisioning data is not installed",
+				Detail: []string{"install samba-dc-provision and samba-dc."},
+			},
+		}},
+	}
+
+	press(t, a, "P")
+	if a.mode != modeNotice {
+		t.Fatalf("the preflight did not open (mode %d)", a.mode)
+	}
+	view := a.View()
+	for _, want := range []string{
+		"/etc/samba/smb.conf", "AD provisioning data", "samba-dc-provision",
+		"mv /etc/samba/smb.conf /etc/samba/smb.conf.orig",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the preflight screen does not mention %q", want)
+		}
+	}
+	if len(a.notice.steps) != 1 {
+		t.Fatalf("steps = %+v", a.notice.steps)
+	}
+	if len(fake.Commands()) != 0 {
+		t.Errorf("the preflight ran something: %+v", fake.Commands())
+	}
+
+	// Cancelling the one offered command keeps the screen and runs nothing.
+	press(t, a, "enter")
+	press(t, a, "n")
+	if a.mode != modeNotice {
+		t.Errorf("a cancelled step closed the screen (mode %d)", a.mode)
+	}
+	if len(fake.Commands()) != 0 {
+		t.Errorf("a cancelled step ran: %+v", fake.Commands())
+	}
+}
+
+// preflightBackend is a backend whose preflight is fixed, so the screen can be
+// driven through states a fake machine does not have to be able to reach.
+type preflightBackend struct {
+	directory.Backend
+	preflight directory.Preflight
+}
+
+func (p *preflightBackend) ProvisionPreflight(string) directory.Preflight {
+	return p.preflight
+}
+
+// TestWizardSkipsTheAddressQuestionOnASingleAddressHost: a question with one
+// answer is noise, and the answer is still collected.
+func TestWizardSkipsTheAddressQuestionOnASingleAddressHost(t *testing.T) {
+	a, fake := newFreshTestApp(t)
+	stubHostAddresses(t, []directory.HostAddress{
+		{IP: "192.168.10.20", Iface: "eth0"},
+	})
+	clearPreflight(t, a)
+
+	press(t, a, "P")
+	typeInto(t, a, "corp.internal")
+	press(t, a, "enter") // realm
+	press(t, a, "enter") // the suggested NetBIOS name
+	press(t, a, "enter") // the default DNS backend
+	press(t, a, "enter") // no forwarder
+	if a.wizard.step != wizTyped {
+		t.Fatalf("the wizard stopped on a question with one answer (step %d)",
+			a.wizard.step)
+	}
+	typeInto(t, a, "corp.internal")
+	press(t, a, "enter")
+	if a.mode != modeConfirm {
+		t.Fatalf("the wizard did not reach the confirm dialog (mode %d)", a.mode)
+	}
+	want := "samba-tool domain provision --realm=CORP.INTERNAL --domain=CORP " +
+		"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
+		"--host-ip=192.168.10.20 '--option=interfaces=lo eth0' " +
+		"'--option=bind interfaces only=yes'"
+	if a.confirm.Command != want {
+		t.Fatalf("the dialog shows %q\n want %q", a.confirm.Command, want)
+	}
+	// Only the preflight's move has run: the wizard itself never runs anything.
+	if ran := fake.Commands(); len(ran) != 1 || ran[0].Argv[0] != "mv" {
+		t.Errorf("ran %+v before the dialog was answered", ran)
+	}
+}
+
+// TestWizardWithoutAnyAddressLeavesTheChoiceToSamba: on a host with no
+// serviceable address there is nothing to answer with, and the command is the
+// one this tool has always built.
+func TestWizardWithoutAnyAddressLeavesTheChoiceToSamba(t *testing.T) {
+	a, _ := newFreshTestApp(t)
+	stubHostAddresses(t, nil)
+	clearPreflight(t, a)
+
+	press(t, a, "P")
+	typeInto(t, a, "corp.internal")
+	press(t, a, "enter")
+	press(t, a, "enter")
+	press(t, a, "enter")
+	press(t, a, "enter")
+	typeInto(t, a, "corp.internal")
+	press(t, a, "enter")
+	if a.mode != modeConfirm {
+		t.Fatalf("the wizard did not reach the confirm dialog (mode %d)", a.mode)
+	}
+	if strings.Contains(a.confirm.Command, "--host-ip") ||
+		strings.Contains(a.confirm.Command, "interfaces") {
+		t.Errorf("an address was invented: %q", a.confirm.Command)
+	}
+}
+
+// TestFailedProvisionKeepsItsTranscript: a provision prints hundreds of lines
+// before it fails, and the reason is in them. Reduced to a status line it was
+// unreadable, which is what made the two preflight conditions so hard to
+// diagnose in the first place.
+func TestFailedProvisionKeepsItsTranscript(t *testing.T) {
+	a, _ := newFreshTestApp(t)
+	transcript := strings.Join([]string{
+		"INFO … #1520: Setting up SAM db",
+		"INFO … #1612: Pre-loading the Samba 4 and AD schema",
+		"ERROR(<class 'FileNotFoundError'>): uncaught exception - [Errno 2] No " +
+			"such file or directory: '/usr/share/samba/setup/ad-schema/" +
+			"AD_DS_Attributes_Windows_Server_v1903.ldf'",
+		"  File \"/usr/lib64/python3.14/site-packages/samba/schema.py\", line 118",
+	}, "\n")
+
+	cmd, err := directory.BuildProvisionCommand(directory.Provision{
+		Realm: "corp.internal", NetBIOS: "CORP",
+		DNSBackend: directory.DNSBackendInternal,
+	})
+	if err != nil {
+		t.Fatalf("BuildProvisionCommand: %v", err)
+	}
+	a.Update(ranMsg{cmd: cmd, output: transcript,
+		err: errors.New("`samba-tool domain provision …` failed: ERROR(<class " +
+			"'FileNotFoundError'>): uncaught exception")})
+
+	if a.mode != modeNotice {
+		t.Fatalf("a failed provision did not get the result screen (mode %d)", a.mode)
+	}
+	view := a.View()
+	for _, want := range []string{
+		"The provision failed",
+		"AD_DS_Attributes_Windows_Server_v1903.ldf",
+		"Pre-loading the Samba 4 and AD schema",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the failure screen does not show %q", want)
+		}
+	}
+	if len(a.notice.steps) != 0 {
+		t.Errorf("a failed provision offered follow-up steps: %+v", a.notice.steps)
+	}
+}
+
+// TestTranscriptTailKeepsTheEnd: the reason a provision failed is the last
+// thing it printed, so the tail is what is kept.
+func TestTranscriptTailKeepsTheEnd(t *testing.T) {
+	var lines []string
+	for i := range 40 {
+		lines = append(lines, "line "+strconv.Itoa(i))
+	}
+	tail := transcriptTail(strings.Join(lines, "\n") + "\n\n   \n")
+	if len(tail) != transcriptTailLines {
+		t.Fatalf("kept %d lines", len(tail))
+	}
+	if tail[len(tail)-1] != "line 39" {
+		t.Errorf("the last kept line is %q", tail[len(tail)-1])
 	}
 }
 
@@ -173,6 +462,9 @@ func TestWizardRefusedWhereADomainExists(t *testing.T) {
 // TestWizardCancelRunsNothing: esc at any step leaves the machine untouched.
 func TestWizardCancelRunsNothing(t *testing.T) {
 	a, fake := newFreshTestApp(t)
+	stubHostAddresses(t, twoAddressHost())
+	clearPreflight(t, a)
+	cleared := len(fake.Commands())
 	press(t, a, "P")
 	typeInto(t, a, "corp.internal")
 	press(t, a, "enter")
@@ -180,7 +472,7 @@ func TestWizardCancelRunsNothing(t *testing.T) {
 	if a.mode != modeBrowse {
 		t.Fatalf("esc did not close the wizard (mode %d)", a.mode)
 	}
-	if len(fake.Commands()) != 0 {
+	if len(fake.Commands()) != cleared {
 		t.Errorf("a cancelled wizard ran %+v", fake.Commands())
 	}
 }

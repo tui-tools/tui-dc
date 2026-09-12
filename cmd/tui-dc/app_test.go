@@ -42,6 +42,12 @@ func press(t *testing.T, a *app, key string) {
 		msg = tea.KeyMsg{Type: tea.KeyEsc}
 	case "tab":
 		msg = tea.KeyMsg{Type: tea.KeyTab}
+	// A picker spends every printable character on its type-ahead filter, so
+	// moving its cursor needs the arrow keys rather than j and k.
+	case "down":
+		msg = tea.KeyMsg{Type: tea.KeyDown}
+	case "up":
+		msg = tea.KeyMsg{Type: tea.KeyUp}
 	}
 	_, cmd := a.Update(msg)
 	for cmd != nil {

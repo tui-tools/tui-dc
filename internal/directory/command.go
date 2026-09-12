@@ -477,6 +477,16 @@ type Backend interface {
 	// `samba-tool domain provision`. It refuses (ErrDomainExists) on a host
 	// that already serves a domain.
 	BuildProvision(p Provision) (runner.Command, error)
+	// ProvisionPreflight reports the conditions that would stop a provision on
+	// this host, given the server role the last read learned. An empty
+	// Preflight means the wizard opens with nothing in front of it.
+	ProvisionPreflight(serverRole string) Preflight
+	// Krb5DropInCommand is the previewable step that installs the Kerberos
+	// configuration a provision generated where the KDC will read it, given
+	// the path the transcript named. False where the host has no include
+	// directory or already configures a realm of its own: then the generated
+	// file is a merge for a person to do, not a file to drop in.
+	Krb5DropInCommand(generated string) (runner.Command, bool)
 	// EnableServiceCommand is the previewable `systemctl enable --now <unit>`
 	// offered after a successful provision, with the unit name this
 	// distribution gives the AD DC daemon. False when systemd or the unit

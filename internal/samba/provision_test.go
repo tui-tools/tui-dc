@@ -80,6 +80,10 @@ func TestParsePasswordSettingsUnknownLineSurvives(t *testing.T) {
 	}
 }
 
+// TestParseProvisionOutput is the bare shape samba printed before 4.24 moved
+// the closing summary behind its logger: the same facts, no prefix. It is a
+// literal rather than a fixture because no pre-4.24 host is left in the lab to
+// capture one from.
 func TestParseProvisionOutput(t *testing.T) {
 	out := "Setting up sam.ldb users and groups\n" +
 		"A Kerberos configuration suitable for Samba AD has been generated " +
@@ -103,14 +107,21 @@ func TestParseProvisionOutput(t *testing.T) {
 	}
 }
 
-// TestParseProvisionOutputLoggerPrefixed is the shape samba 4.24 prints: the
-// same facts, each behind the logger's own prefix. Anchoring the parser at the
-// start of the line found none of them, which cost the user the only copy of
-// the Administrator password that will ever exist.
+// TestParseProvisionOutputLoggerPrefixed reads the real transcript of a
+// successful provision, captured on a tui-lab Fedora 44 guest running samba
+// 4.24.6. That is the shape samba 4.24 prints: the same facts, each behind the
+// logger's own prefix. Anchoring the parser at the start of the line found none
+// of them, which cost the user the only copy of the Administrator password that
+// will ever exist.
 func TestParseProvisionOutputLoggerPrefixed(t *testing.T) {
 	result := ParseProvisionOutput(read(t, "domain-provision.txt"))
 	if result.AdminPassword != "FAKE-password-not-a-real-one" {
 		t.Errorf("AdminPassword = %q", result.AdminPassword)
+	}
+	// A password is what the user copies out of the screen, so it has to come
+	// out as the single token samba printed and nothing more.
+	if len(strings.Fields(result.AdminPassword)) != 1 {
+		t.Errorf("AdminPassword is not one token: %q", result.AdminPassword)
 	}
 	if result.Krb5Conf != "/var/lib/samba/private/krb5.conf" {
 		t.Errorf("Krb5Conf = %q", result.Krb5Conf)
@@ -120,13 +131,27 @@ func TestParseProvisionOutputLoggerPrefixed(t *testing.T) {
 	}
 	// The summary is shown verbatim, so the log prefix must be gone from it
 	// and samba's own alignment kept.
-	if result.Summary[0] != "Server Role:           active directory domain controller" {
-		t.Errorf("summary[0] = %q", result.Summary[0])
+	want := []string{
+		"Server Role:           active directory domain controller",
+		"Hostname:              fedora",
+		"NetBIOS Domain:        LAB",
+		"DNS Domain:            lab.example",
+		"DOMAIN SID:            S-1-5-21-1111111111-2222222222-3333333333",
+	}
+	for i, line := range want {
+		if result.Summary[i] != line {
+			t.Errorf("summary[%d] = %q\n          want %q", i, result.Summary[i], line)
+		}
 	}
 	for _, line := range result.Summary {
-		if strings.Contains(line, "pid:") {
+		if strings.Contains(line, "pid:") || strings.Contains(line, "INFO") {
 			t.Errorf("a log prefix reached the result screen: %q", line)
 		}
+	}
+	// The real transcript of a provision given --host-ip carries no WARNING
+	// line at all; the warning path is held by the captured refusal instead.
+	if len(result.Warnings) != 0 {
+		t.Errorf("warnings = %q", result.Warnings)
 	}
 }
 
@@ -189,9 +214,29 @@ func TestFreshFakeWalksProvision(t *testing.T) {
 		t.Error("a fresh machine has no password policy to read")
 	}
 
+	// The preflight comes first on this machine, exactly as it does on a real
+	// one: the distribution's smb.conf is in the way, and provision refuses
+	// until the previewed move has run.
+	preflight := fake.ProvisionPreflight(model.Domain.ServerRole)
+	if preflight.OK() {
+		t.Fatal("the fresh fake reported nothing in provision's way")
+	}
+	fixable := preflight.Fixable()
+	if len(fixable) != 1 || fixable[0].Fix.String() !=
+		"mv /etc/samba/smb.conf /etc/samba/smb.conf.orig" {
+		t.Fatalf("the offered fix is %+v", fixable)
+	}
+	if _, err := fake.Run(ctx, *fixable[0].Fix); err != nil {
+		t.Fatalf("the previewed move failed: %v", err)
+	}
+	if !fake.ProvisionPreflight(model.Domain.ServerRole).OK() {
+		t.Error("the move did not clear the condition")
+	}
+
 	cmd, err := fake.BuildProvision(directory.Provision{
 		Realm: "corp.internal", NetBIOS: "CORP",
 		DNSBackend: directory.DNSBackendInternal, Forwarder: "10.0.0.1",
+		HostIP: "192.168.10.20", Iface: "eth0",
 	})
 	if err != nil {
 		t.Fatalf("BuildProvision: %v", err)
@@ -207,6 +252,17 @@ func TestFreshFakeWalksProvision(t *testing.T) {
 	if result.Krb5Conf == "" {
 		t.Error("the fake provision printed no krb5.conf note to parse")
 	}
+	// The address was given, so samba had nothing to guess: the only warning
+	// left is the IPv6 one, and the A record carries the address that was asked
+	// for rather than one this fake chose.
+	for _, warning := range result.Warnings {
+		if strings.Contains(warning, "More than one IPv4 address") {
+			t.Errorf("a provision given --host-ip still warned: %q", warning)
+		}
+	}
+	if len(result.Warnings) == 0 {
+		t.Error("the fake provision printed no WARNING line to parse")
+	}
 
 	model, err = fake.Load(ctx)
 	if err != nil {
@@ -217,6 +273,19 @@ func TestFreshFakeWalksProvision(t *testing.T) {
 	}
 	if len(model.Users) == 0 || len(model.Groups) == 0 {
 		t.Error("the provisioned domain is empty")
+	}
+	served := false
+	for _, record := range model.Zone.Records {
+		if record.Type == "A" {
+			served = true
+			if record.Data != "192.168.10.20" {
+				t.Errorf("an A record answers %q, not the address provisioned",
+					record.Data)
+			}
+		}
+	}
+	if !served {
+		t.Error("the provisioned zone has no A record")
 	}
 	if !model.Policy.Read {
 		t.Error("the provisioned domain's password policy was not read")

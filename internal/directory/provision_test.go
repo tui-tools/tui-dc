@@ -35,6 +35,26 @@ func TestBuildProvisionCommandArgv(t *testing.T) {
 				DNSBackend: DNSBackendBind9DLZ},
 			"samba-tool domain provision --realm=AD.EXAMPLE.ORG --domain=ADEX " +
 				"--server-role=dc --dns-backend=BIND9_DLZ"},
+		// The address the controller serves, and the binding it implies: the
+		// interface that owns the address plus loopback, so the internal DNS
+		// server claims port 53 only where this DC answers.
+		{"an address and the interface it implies",
+			Provision{Realm: "lab.example", NetBIOS: "LAB",
+				DNSBackend: DNSBackendInternal, Forwarder: "192.168.10.1",
+				HostIP: "192.168.10.20", Iface: "eth0"},
+			"samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB " +
+				"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
+				"--host-ip=192.168.10.20 --option=interfaces=lo eth0 " +
+				"--option=bind interfaces only=yes " +
+				"--option=dns forwarder=192.168.10.1"},
+		// A host with exactly one address still gets --host-ip: the question is
+		// skipped, the answer is not.
+		{"an address with no interface to bind",
+			Provision{Realm: "lab.example", NetBIOS: "LAB",
+				DNSBackend: DNSBackendInternal, HostIP: "192.168.10.20"},
+			"samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB " +
+				"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
+				"--host-ip=192.168.10.20"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd, err := BuildProvisionCommand(tc.p)
@@ -97,6 +117,21 @@ func TestBuildProvisionCommandRefusals(t *testing.T) {
 			p.DNSBackend = DNSBackendBind9DLZ
 			p.Forwarder = "10.0.0.1"
 		}},
+		{"host ip that is not an IP", func(p *Provision) { p.HostIP = "dc1.lab.example" }},
+		{"host ip that reads as a flag", func(p *Provision) { p.HostIP = "--interactive" }},
+		{"host ip that is IPv6", func(p *Provision) { p.HostIP = "2001:db8::1" }},
+		// An interface name becomes part of one --option argument, so anything
+		// that could end it and start another smb.conf setting is refused.
+		{"interface with a space", func(p *Provision) {
+			p.HostIP, p.Iface = "192.168.10.20", "eth0 bind interfaces only=no"
+		}},
+		{"interface with an equals sign", func(p *Provision) {
+			p.HostIP, p.Iface = "192.168.10.20", "eth0=x"
+		}},
+		{"interface with a newline", func(p *Provision) {
+			p.HostIP, p.Iface = "192.168.10.20", "eth0\nrealm=OTHER"
+		}},
+		{"an interface with no address", func(p *Provision) { p.Iface = "eth0" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := valid

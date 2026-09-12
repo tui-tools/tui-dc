@@ -1,0 +1,19 @@
+INFO 2026-01-01 10:00:00,104 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2180: Looking up IPv4 addresses
+WARNING 2026-01-01 10:00:00,106 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2204: No IPv6 address will be assigned
+WARNING 2026-01-01 10:00:00,107 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2122: More than one IPv4 address found. Using 192.168.10.99
+INFO 2026-01-01 10:00:01,880 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1485: Setting up share.ldb
+INFO 2026-01-01 10:00:01,901 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1492: Setting up secrets.ldb
+INFO 2026-01-01 10:00:01,932 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1497: Setting up the registry
+INFO 2026-01-01 10:00:02,498 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1509: Setting up idmap db
+INFO 2026-01-01 10:00:02,556 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1520: Setting up SAM db
+INFO 2026-01-01 10:00:03,011 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1036: Setting up sam.ldb partitions and settings
+INFO 2026-01-01 10:00:03,121 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1612: Pre-loading the Samba 4 and AD schema
+ERROR(<class 'FileNotFoundError'>): uncaught exception - [Errno 2] No such file or directory: '/usr/share/samba/setup/ad-schema/AD_DS_Attributes_Windows_Server_v1903.ldf'
+  File "/usr/lib64/python3.14/site-packages/samba/netcmd/__init__.py", line 388, in _run
+    return self.run(*args, **kwargs)
+  File "/usr/lib64/python3.14/site-packages/samba/netcmd/domain/provision.py", line 270, in run
+    result = provision(self.logger,
+  File "/usr/lib64/python3.14/site-packages/samba/provision/__init__.py", line 2216, in provision
+    schema = Schema(domainsid, invocationid=invocationid, schemadn=names.schemadn)
+  File "/usr/lib64/python3.14/site-packages/samba/schema.py", line 118, in __init__
+    self.schema_data += read_ms_schema(attr_path, oc_path)

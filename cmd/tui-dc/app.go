@@ -106,6 +106,10 @@ type app struct {
 	input   ui.Input
 	wizard  wizardState
 	notice  noticeState
+	// noticeResume reports that the open confirm dialog is a step the notice
+	// screen offered, so the screen comes back afterwards with the steps that
+	// are still pending — whether the step ran, failed or was cancelled.
+	noticeResume bool
 	// pending is the action an open prompt is collecting a value for.
 	pending directory.ActionSpec
 	// pendingTarget is the row that action applies to, captured when the
@@ -279,19 +283,36 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ranMsg:
 		a.busy = false
-		if msg.err != nil {
-			a.setStatus(ui.StatusError, runner.FirstLine(msg.err.Error()))
-			return a, a.load()
-		}
 		if directory.IsProvisionCommand(msg.cmd) {
-			// The transcript carries the one-time Administrator password and
-			// the krb5.conf note, which must not scroll away in a status
-			// line: they get the result screen, while the domain reloads
-			// underneath it.
-			a.notice = a.provisionNotice(msg.output)
+			// The transcript carries the one-time Administrator password, the
+			// warnings and the krb5.conf note, which must not scroll away in a
+			// status line: they get the result screen, while the domain reloads
+			// underneath it. A failed provision gets the same screen with the
+			// tail of its transcript — hundreds of lines run before it fails,
+			// and the reason is in them.
+			if msg.err != nil {
+				a.setStatus(ui.StatusError, runner.FirstLine(msg.err.Error()))
+			}
+			a.notice = a.provisionNotice(msg.output, msg.err)
+			a.noticeResume = false
 			a.mode = modeNotice
 			a.loading = true
 			return a, a.load()
+		}
+		if msg.err != nil {
+			a.setStatus(ui.StatusError, runner.FirstLine(msg.err.Error()))
+			if a.noticeResume {
+				// A step the notice offered failed: the screen says so and keeps
+				// whatever came after it, instead of vanishing behind a status
+				// line the next read would overwrite.
+				a.noteNoticeResult(msg.cmd, msg.err)
+				a.mode = modeNotice
+			}
+			return a, a.load()
+		}
+		if a.noticeResume {
+			a.noteNoticeResult(msg.cmd, nil)
+			a.mode = modeNotice
 		}
 		summary := strings.TrimSpace(msg.output)
 		if summary == "" {
@@ -358,6 +379,11 @@ func (a *app) handleConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	a.confirm = ui.Confirm{}
 	if !confirmed || !ok {
 		a.setStatus(ui.StatusInfo, "cancelled")
+		if a.noticeResume && a.notice.open() {
+			// A cancelled step is not a reason to lose the screen it came from,
+			// nor the steps that were still to come after it.
+			a.mode = modeNotice
+		}
 		return a, nil
 	}
 	a.busy = true

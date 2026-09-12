@@ -1,0 +1,10 @@
+INFO 2026-01-01 10:00:00,100 pid:1234 /usr/lib64/python3.14/site-packages/samba/netcmd/domain/provision.py #260: Administrator password will be set randomly!
+ERROR(<class 'samba.provision.ProvisioningError'>): Provision failed - ProvisioningError: guess_names: 'server role=auto' in /etc/samba/smb.conf must match chosen server role 'active directory domain controller'!  Please remove the smb.conf file and let provision generate it
+  File "/usr/lib64/python3.14/site-packages/samba/netcmd/__init__.py", line 388, in _run
+    return self.run(*args, **kwargs)
+  File "/usr/lib64/python3.14/site-packages/samba/netcmd/domain/provision.py", line 270, in run
+    result = provision(self.logger,
+  File "/usr/lib64/python3.14/site-packages/samba/provision/__init__.py", line 2105, in provision
+    names = guess_names(lp=lp, hostname=hostname, domain=domain,
+  File "/usr/lib64/python3.14/site-packages/samba/provision/__init__.py", line 706, in guess_names
+    raise ProvisioningError("guess_names: 'server role=%s' in %s must match chosen server role '%s'!  Please remove the smb.conf file and let provision generate it" % (lp.get("server role"), lp.configfile, server_role))
