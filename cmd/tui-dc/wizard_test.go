@@ -84,10 +84,18 @@ func TestProvisionWizardEndToEnd(t *testing.T) {
 	if a.mode != modeConfirm {
 		t.Fatalf("the wizard did not end in the confirm dialog (mode %d)", a.mode)
 	}
-	want := "samba-tool domain provision --realm=CORP.INTERNAL --domain=CORP " +
-		"--server-role=dc --dns-backend=SAMBA_INTERNAL --dns-forwarder=10.0.0.1"
-	if a.confirm.Command != want {
-		t.Fatalf("the dialog shows %q\n want %q", a.confirm.Command, want)
+	// The forwarder is an smb.conf parameter, not a provision flag, so it
+	// travels as one --option argument whose parameter name carries a space.
+	// The argv keeps that space and the preview quotes it, so what the dialog
+	// shows is still a line a reader could paste into a shell.
+	wantArgv := "samba-tool domain provision --realm=CORP.INTERNAL --domain=CORP " +
+		"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
+		"--option=dns forwarder=10.0.0.1"
+	wantPreview := "samba-tool domain provision --realm=CORP.INTERNAL --domain=CORP " +
+		"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
+		"'--option=dns forwarder=10.0.0.1'"
+	if a.confirm.Command != wantPreview {
+		t.Fatalf("the dialog shows %q\n want %q", a.confirm.Command, wantPreview)
 	}
 	if !a.confirm.Danger {
 		t.Error("a provision must be painted as destructive")
@@ -101,8 +109,13 @@ func TestProvisionWizardEndToEnd(t *testing.T) {
 
 	press(t, a, "y")
 	ran := fake.Commands()
-	if len(ran) != 1 || ran[0].String() != want {
+	if len(ran) != 1 || ran[0].String() != wantArgv {
 		t.Fatalf("ran %+v, want exactly the previewed command", ran)
+	}
+	// Nothing but quoting separates the two: the preview renders the argv that
+	// ran, it does not build a second command line.
+	if a.backend.Preview(ran[0]) != wantPreview {
+		t.Errorf("the command that ran previews as %q", a.backend.Preview(ran[0]))
 	}
 
 	// The result screen shows the password samba-tool printed, once.

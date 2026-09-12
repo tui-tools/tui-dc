@@ -239,3 +239,24 @@ func FuzzParseServerRole(f *testing.F) {
 		}
 	})
 }
+
+// FuzzParseProvisionOutput covers the provision transcript, whose facts samba
+// prints through its logger and which therefore has to be searched line-wide.
+// That looseness is what the invariants hold here: a password is one token out
+// of the input, and nothing the screen shows was invented.
+func FuzzParseProvisionOutput(f *testing.F) {
+	seedFromTestdata(f, "domain-provision")
+	f.Add("Admin password:        xoh7aeF9quiZ~ie0Aiph\n")
+	f.Add("Administrator password will be set randomly!\n")
+	f.Fuzz(func(t *testing.T, input string) {
+		result := ParseProvisionOutput(input)
+		if strings.ContainsAny(result.AdminPassword, " \t") {
+			t.Fatalf("a password of several tokens reached the screen: %q",
+				result.AdminPassword)
+		}
+		containedIn(t, input, result.AdminPassword, result.Krb5Conf)
+		for _, line := range result.Summary {
+			containedIn(t, input, line)
+		}
+	})
+}

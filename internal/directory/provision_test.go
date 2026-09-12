@@ -16,11 +16,15 @@ func TestBuildProvisionCommandArgv(t *testing.T) {
 		p    Provision
 		want string
 	}{
+		// The forwarder travels as the smb.conf parameter it is: there is no
+		// --dns-forwarder on samba-tool, and a command line carrying one is
+		// rejected whole before provisioning starts.
 		{"internal dns with a forwarder",
 			Provision{Realm: "lab.example", NetBIOS: "lab",
 				DNSBackend: DNSBackendInternal, Forwarder: "10.0.0.1"},
 			"samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB " +
-				"--server-role=dc --dns-backend=SAMBA_INTERNAL --dns-forwarder=10.0.0.1"},
+				"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
+				"--option=dns forwarder=10.0.0.1"},
 		{"internal dns without a forwarder",
 			Provision{Realm: "corp.internal", NetBIOS: "CORP",
 				DNSBackend: DNSBackendInternal},

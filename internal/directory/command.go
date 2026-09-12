@@ -505,3 +505,47 @@ type Details interface {
 	// GroupMembers reads one group's membership.
 	GroupMembers(ctx context.Context, name string) ([]string, error)
 }
+
+// Previewable returns the command as a preview must read it: the same argv,
+// with any element a shell would not read as one word wrapped in quotes.
+//
+// The runner joins argv with spaces, which is the whole truth for every
+// command this tool builds but one. `--option=dns forwarder=10.0.0.1` is a
+// single argument whose parameter name carries a space, and joined bare it
+// would preview as two — a command line that does something else from the one
+// that runs. Quoting it keeps the preview's promise: what the dialog shows is
+// what executes, and it is still text the reader can paste into a shell.
+//
+// Only the rendering changes. Run is always given the original command, so no
+// quote ever reaches an argument samba-tool parses.
+func Previewable(cmd runner.Command) runner.Command {
+	quoted := make([]string, len(cmd.Argv))
+	for i, arg := range cmd.Argv {
+		quoted[i] = shellQuote(arg)
+	}
+	cmd.Argv = quoted
+	return cmd
+}
+
+// shellQuote renders one argument the way a shell would have to be given it.
+// Single quotes are the only form that needs no further escaping, apart from a
+// single quote itself, which leaves the quoted run to carry a literal one.
+func shellQuote(arg string) string {
+	if arg == "" {
+		return "''"
+	}
+	if !strings.ContainsFunc(arg, needsQuoting) {
+		return arg
+	}
+	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+}
+
+// needsQuoting reports a rune that is not safe bare in a shell word. The set
+// allowed through is the conservative one: what an unquoted word may contain
+// in every shell, so a preview is never quoted for decoration.
+func needsQuoting(r rune) bool {
+	if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+		return false
+	}
+	return !strings.ContainsRune("@%+=:,./-_", r)
+}

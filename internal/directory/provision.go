@@ -187,7 +187,14 @@ func BuildProvisionCommand(p Provision) (runner.Command, error) {
 		"--dns-backend=" + p.DNSBackend,
 	}
 	if p.Forwarder != "" {
-		argv = append(argv, "--dns-forwarder="+p.Forwarder)
+		// There is no --dns-forwarder: `samba-tool domain provision` takes
+		// only --host-ip and --host-ip6, and rejects the whole command line
+		// before doing any work when it is given a flag it does not know. The
+		// forwarder is the smb.conf parameter `dns forwarder`, which provision
+		// sets through --option. The parameter name carries a space, so this
+		// is one argv element with a space in it; quoting belongs to the
+		// preview that renders the argv, never to the argv itself.
+		argv = append(argv, "--option=dns forwarder="+p.Forwarder)
 	}
 	return runner.Command{
 		Argv:        argv,

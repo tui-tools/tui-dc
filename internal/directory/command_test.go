@@ -3,6 +3,8 @@ package directory
 import (
 	"strings"
 	"testing"
+
+	"github.com/tui-tools/tui-kit/runner"
 )
 
 // specFor finds an action's spec by its action name, which is how a test names
@@ -226,5 +228,47 @@ func TestParseRecordSpec(t *testing.T) {
 	}
 	if _, _, _, err := ParseRecordSpec("ws03 A"); err == nil {
 		t.Error("a record with no data was accepted")
+	}
+}
+
+// TestPreviewable spells out what quoting a preview does and does not do: the
+// argv is untouched, ordinary arguments are left bare, and the ones a shell
+// would read as more than one word are quoted so the previewed line is the
+// command that runs.
+func TestPreviewable(t *testing.T) {
+	cmd, err := BuildProvisionCommand(Provision{
+		Realm: "lab.example", NetBIOS: "LAB",
+		DNSBackend: DNSBackendInternal, Forwarder: "10.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("BuildProvisionCommand: %v", err)
+	}
+	want := "samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB " +
+		"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
+		"'--option=dns forwarder=10.0.0.1'"
+	if got := Previewable(cmd).String(); got != want {
+		t.Errorf("preview = %q\n want %q", got, want)
+	}
+	// The command itself is not rewritten: a quote must never reach an
+	// argument samba-tool parses.
+	if !strings.HasSuffix(cmd.String(), "--option=dns forwarder=10.0.0.1") {
+		t.Errorf("Previewable rewrote the argv it was given: %q", cmd.String())
+	}
+	for _, arg := range []string{"samba-tool", "--realm=LAB.EXAMPLE",
+		"Administrator", "10.10.0.23", "CN=Users,DC=lab,DC=example"} {
+		if got := Previewable(runner.Command{Argv: []string{arg}}).String(); got != arg {
+			t.Errorf("%q was quoted as %q, and needs no quoting", arg, got)
+		}
+	}
+	// A group name with a space is the other argument this applies to, and an
+	// embedded quote must survive it.
+	got := Previewable(runner.Command{
+		Argv: []string{"samba-tool", "group", "listmembers", "Domain Admins"},
+	}).String()
+	if got != "samba-tool group listmembers 'Domain Admins'" {
+		t.Errorf("preview = %q", got)
+	}
+	if got := Previewable(runner.Command{Argv: []string{"it's"}}).String(); got != `'it'\''s'` {
+		t.Errorf("an embedded quote previewed as %q", got)
 	}
 }
