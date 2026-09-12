@@ -14,6 +14,8 @@
 set -uo pipefail
 
 bin="${TUI_LAB_BIN:-tui-dc}"
+# TOOL is the manifest name, which is what a compatibility result is keyed on.
+TOOL=tui-dc
 pass=0
 fail=0
 skip=0
@@ -38,6 +40,45 @@ check() {
 skip() {
   printf 'SKIP  %s (%s)\n' "$1" "$2"
   skip=$((skip + 1))
+}
+
+# --- compatibility evidence -------------------------------------------------
+#
+# The manifest's `tested` list is generated, not claimed: it is rebuilt from
+# compat/results.jsonl by tui-kit/tools/compat-sync.py, and this is where a
+# line of that file comes from. Nothing in this repository writes a version
+# into the manifest by hand.
+#
+# The version recorded is the string `samba-tool --version` printed on this
+# machine, verbatim, distribution suffix and all: on Ubuntu that is
+# `4.19.5-Ubuntu`. The evidence says what ran. Folding it into the shape the
+# manifest compares a probe against belongs to the harvester, which already
+# has the manifest and its `versionRegex` in hand, and not here.
+#
+# The line is printed behind a `compat-result:` prefix so it survives the trip
+# out of the guest through the lab's per-VM log, and appended to
+# $TUI_COMPAT_RESULTS as well for a run outside the lab.
+record_compat() {
+  local outcome="$1" version distro today line
+  version=$(sudo -n samba-tool --version 2>&1 | tail -1)
+  # A samba-tool that cannot import its own modules prints frames and no
+  # version at all, and a frame is not evidence. The only strings accepted
+  # here are the ones compat-sync.py and the family schema take as a version,
+  # so an unusable line never reaches the results file.
+  if [[ ! $version =~ ^[0-9]+(\.[0-9]+){0,2}([-+][0-9A-Za-z.]+)?$ ]]; then
+    echo "      samba-tool printed no version, so no compatibility result is recorded"
+    return
+  fi
+
+  distro=$(. /etc/os-release && echo "${ID}-${VERSION_ID:-rolling}")
+  today=$(date -u +%Y-%m-%d)
+  line=$(printf '{"backend":"samba","date":"%s","distro":"%s","result":"%s","suite":"smoke","tool":"%s","version":"%s"}' \
+    "$today" "$distro" "$outcome" "$TOOL" "$version")
+
+  printf 'compat-result: %s\n' "$line"
+  if [[ -n ${TUI_COMPAT_RESULTS:-} ]]; then
+    printf '%s\n' "$line" >>"$TUI_COMPAT_RESULTS"
+  fi
 }
 
 # json reads one field out of a --check run without needing jq, which is not
@@ -154,20 +195,13 @@ else
       'true'
   fi
 
-  # record_compat appends the version this run exercised to
-  # compat/results.jsonl, which `make compat` folds into tool.json. Nothing
-  # here writes a version into the manifest by hand.
-  record_compat() {
-    local version distro
-    version=$(sudo -n samba-tool --version 2>&1 | tail -1)
-    distro=$(. /etc/os-release && echo "$ID $VERSION_ID")
-    mkdir -p compat
-    printf '{"backend":"samba","version":"%s","distro":"%s","tool":"tui-dc","result":"%s"}\n' \
-      "$version" "$distro" "$([[ $fail -eq 0 ]] && echo pass || echo fail)" \
-      >>compat/results.jsonl
-    printf 'INFO  recorded samba %s on %s\n' "$version" "$distro"
-  }
-  record_compat
+  # The version this run exercised, recorded where `make compat` can fold it
+  # into the manifest. The outcome is the suite's own verdict so far.
+  if [[ $fail -eq 0 ]]; then
+    record_compat pass
+  else
+    record_compat fail
+  fi
 fi
 
 echo "--- tui-dc: $pass passed, $fail failed, $skip skipped"

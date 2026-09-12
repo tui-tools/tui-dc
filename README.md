@@ -460,7 +460,7 @@ own smoke test appends to when it runs against a real machine in
 
 ## What is still missing
 
-Honest list, because this repository is private for exactly this reason:
+An explicit list, because a gap you can read is cheaper than one you discover:
 
 - **Three fixtures are still constructed rather than captured.** `samba-tool
   domain provision` cannot complete inside an unprivileged container — it panics
