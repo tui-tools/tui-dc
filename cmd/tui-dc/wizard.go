@@ -376,8 +376,12 @@ func (a *app) provisionNotice(output string, err error) noticeState {
 		add("")
 	}
 
-	// The Kerberos step first, then the unit — in that order because on a samba
-	// built against the MIT KDC the unit does not start without it.
+	// The chain, in the order the host needs it rather than in the order it was
+	// written: the Kerberos drop-in where the MIT KDC reads one, then the
+	// distribution's own file server out of the way, then the unit. Both of the
+	// first two exist because the unit does not start without them, and on which
+	// host is a fact about the distribution — Fedora needs the first and not the
+	// second, Debian and Ubuntu the second and not the first, Arch neither.
 	if cmd, ok := a.backend.Krb5DropInCommand(result.Krb5Conf); ok {
 		notice.steps = append(notice.steps,
 			noticeStep{cmd: cmd, body: samba.Krb5DropInBody})
@@ -387,6 +391,14 @@ func (a *app) provisionNotice(output string, err error) noticeState {
 	} else if result.Krb5Conf != "" {
 		add("A Kerberos configuration was generated at "+result.Krb5Conf+";",
 			"merge it into /etc/krb5.conf (do not symlink it).")
+	}
+	if cmd, ok := a.backend.FileServerDisableCommand(); ok {
+		notice.steps = append(notice.steps,
+			noticeStep{cmd: cmd, body: samba.FileServerDisableBody})
+		add("", "This host has the distribution's own file server enabled, and it holds",
+			"139 and 445 — the ports this controller's own smbd has to bind, so the",
+			"unit below cannot start while they are held. One of the steps is",
+			cmd.String()+".")
 	}
 	add("")
 	if cmd, ok := a.backend.EnableServiceCommand(); ok {
@@ -484,6 +496,20 @@ func (a *app) noticeView() string {
 	lines = append(lines, "",
 		a.theme.Key.Render("enter")+a.theme.KeyDesc.Render(next+"    ")+
 			a.theme.Key.Render("esc")+a.theme.KeyDesc.Render(" close"))
-	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center,
-		box.Render(strings.Join(lines, "\n")))
+	rendered := box.Render(strings.Join(lines, "\n"))
+
+	// Vertically centred while it fits, anchored to the top when it does not.
+	//
+	// Centring a box taller than the screen cuts the same number of rows off
+	// both ends, and the row it takes first is the title: a preflight naming
+	// several conditions appeared on a 160x44 pane during the Ubuntu lab run
+	// with its first line gone, which made a screen about what is wrong look
+	// like a screen about something else. There is no scrolling here, so this
+	// does not make a long notice fully readable — it decides which end of it
+	// survives, and the end that says what this screen is must.
+	vertical := lipgloss.Center
+	if lipgloss.Height(rendered) > a.height {
+		vertical = lipgloss.Top
+	}
+	return lipgloss.Place(a.width, a.height, lipgloss.Center, vertical, rendered)
 }
