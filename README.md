@@ -445,13 +445,13 @@ hidden; one below the minimum is marked as such and the tool still runs.
 | Binary | `samba-tool` |
 | Version read with | `samba-tool --version` |
 | Minimum | 4.13 |
-| Tested | none yet |
+| Tested | `4.19.5`, `4.24.6`, `4.24.7` |
 | Version-gated features | `computer-subcommand` (since 4.8) |
 
 | Versions | What changes |
 | --- | --- |
 | `<4.8` | `samba-tool computer` does not exist, so the computers screen is empty |
-| `<4.13` | untested: the output of `domain info`, `dns query` and `drs showrepl` has changed shape across releases and the parsers are only checked against 4.19 and 4.22 |
+| `<4.13` | untested: the output of `domain info`, `dns query` and `drs showrepl` has changed shape across releases, and the parsers are checked against live controllers running 4.19.5, 4.24.6 and 4.24.7; nothing older, and nothing between 4.13 and 4.19, has been exercised |
 
 The tested versions are generated from `compat/results.jsonl`, which the tool's
 own smoke test appends to when it runs against a real machine in
@@ -462,14 +462,16 @@ own smoke test appends to when it runs against a real machine in
 
 Honest list, because this repository is private for exactly this reason:
 
-- **It has never run against a real domain controller.** `samba-tool domain
-  provision` cannot complete inside an unprivileged container — it panics at the
-  sysvol ACL step — so the fixtures for `domain info`, `dns query` and `drs
-  showrepl` are constructed from the documented formats rather than captured.
+- **Three fixtures are still constructed rather than captured.** `samba-tool
+  domain provision` cannot complete inside an unprivileged container — it panics
+  at the sysvol ACL step — so the fixtures for `domain info`, `dns query` and
+  `drs showrepl` are written from the documented formats rather than captured.
   Everything else in [`internal/samba/testdata`](internal/samba/testdata) is
   real output from a throwaway DC, and that directory's README says which is
-  which. A real DC in [tui-lab](https://github.com/tui-tools/tui-lab) replaces
-  the three constructed ones, and until it has, no version belongs in `tested`.
+  which. The tool itself has now run against a live domain controller on each of
+  the three guests [tui-lab](https://github.com/tui-tools/tui-lab) covers, which
+  is where the versions in `tested` come from; capturing those three fixtures
+  from one of those controllers is still open.
 - **The computers screen is read-only.** `samba-tool computer create` and
   `computer delete` are obvious next actions and were left out of phase one
   deliberately: a machine account deleted by accident takes a domain member off

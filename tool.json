@@ -114,8 +114,13 @@
         },
         {
           "range": "<4.13",
-          "impact": "untested: the output of `domain info`, `dns query` and `drs showrepl` has changed shape across releases and the parsers are only checked against 4.19 and 4.22"
+          "impact": "untested: the output of `domain info`, `dns query` and `drs showrepl` has changed shape across releases, and the parsers are checked against live controllers running 4.19.5, 4.24.6 and 4.24.7; nothing older, and nothing between 4.13 and 4.19, has been exercised"
         }
+      ],
+      "tested": [
+        "4.19.5",
+        "4.24.6",
+        "4.24.7"
       ]
     }
   ],
