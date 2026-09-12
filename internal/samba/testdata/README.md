@@ -68,8 +68,8 @@ and are marked as such until a real DC in
 | File | Command it imitates |
 | --- | --- |
 | `domain-info.txt` | `samba-tool domain info <server>` |
-| `dns-query.txt` | `samba-tool dns query <server> <zone> @ ALL` |
-| `drs-showrepl.txt` | `samba-tool drs showrepl` |
+| `dns-query.txt` | `samba-tool dns query <server> <zone> @ ALL -P` |
+| `drs-showrepl.txt` | `samba-tool drs showrepl <server> -P` |
 
 `drs-showrepl.txt` deliberately contains one failing partition, because a
 replication screen that has only ever been fed healthy output is a replication
@@ -77,3 +77,10 @@ screen nobody has tested.
 
 Replacing them is the first thing to do once a real DC is in the lab; the
 parser tests should then be re-run unchanged.
+
+A fixture cannot show which command line produced it, and that is a gap worth
+naming here: a zone dump parses identically whether or not the invocation could
+authenticate, so these files cannot tell a correct `dns query` from one that
+would have failed on a real controller for want of `-P` or a server argument.
+`TestLoadDomainRPCArgv` in `load_test.go` asserts the argument lists instead,
+and is what keeps those two reads honest.

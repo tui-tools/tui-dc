@@ -93,8 +93,8 @@ It is also not a file server tool. The Samba on a domain controller also serves
 | **users** | `user list`, then `user show` per row | create, delete, enable, suspend, reset password, set expiry |
 | **groups** | `group list`, then `group listmembers` per row | create, delete, add member, remove member |
 | **computers** | `computer list`, then `computer show` per row | nothing yet |
-| **dns** | `dns query <zone> @ ALL` | add record, delete record |
-| **replication** | `drs showrepl` | nothing |
+| **dns** | `dns query <server> <zone> @ ALL -P` | add record, delete record |
+| **replication** | `drs showrepl <server> -P` | nothing |
 
 The lists are cheap and the detail is not: `user show` is one samba-tool
 process per account, and a domain with five hundred of them would take minutes
@@ -257,6 +257,13 @@ Reads escalate. samba-tool opens the directory database directly and that
 database is readable only by root, so there is no unprivileged read path to fall
 back on. A machine where escalation is refused says so at startup rather than
 showing an empty domain.
+
+Two commands are not a database read: `dns` talks DNS RPC and `drs` talks DRS,
+both authenticated calls to the running controller, which root alone does not
+satisfy. Those four commands — the zone read, the replication read, and the two
+record writes — carry samba-tool's `-P`, so they authenticate as this machine's
+own account out of the secrets this host already holds. No password is typed or
+stored, and the flag is part of the command line the confirm dialog shows.
 
 ## Non-interactive
 

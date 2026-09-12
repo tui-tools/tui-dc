@@ -54,11 +54,11 @@ func TestBuildCommandArgv(t *testing.T) {
 			"samba-tool group removemembers Helpdesk alice"},
 		{"add a record", DNSAdd,
 			Intent{Value: "ws03 a 10.10.0.23", Zone: "lab.example", Server: "127.0.0.1"},
-			"samba-tool dns add 127.0.0.1 lab.example ws03 A 10.10.0.23"},
+			"samba-tool dns add 127.0.0.1 lab.example ws03 A 10.10.0.23 -P"},
 		{"delete a record", DNSDelete,
 			Intent{Target: "ws03", Type: "A", Data: "10.10.0.23",
 				Zone: "lab.example", Server: "127.0.0.1"},
-			"samba-tool dns delete 127.0.0.1 lab.example ws03 A 10.10.0.23"},
+			"samba-tool dns delete 127.0.0.1 lab.example ws03 A 10.10.0.23 -P"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd, err := BuildCommand(specFor(t, tc.action), tc.intent)
