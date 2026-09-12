@@ -50,6 +50,16 @@ type Fake struct {
 	serviceEnabled bool
 	krb5DropIn     bool
 
+	// fileServerEnabled is whether this fake machine still has the
+	// distribution's own file server units enabled, the way a Debian or Ubuntu
+	// host has them after installing samba. A fresh fake does, so --demo-fresh
+	// walks the Debian half of the step chain as well as the Fedora half: the
+	// Kerberos drop-in an MIT KDC build needs, the file server that holds 139
+	// and 445, and only then the unit. The fake refuses to start the unit while
+	// either is outstanding, which is what makes the order visible in the demo
+	// instead of merely documented.
+	fileServerEnabled bool
+
 	// smbConfInTheWay is the preflight's first condition, on a fake machine:
 	// the distribution's own /etc/samba/smb.conf, claiming a server role that
 	// is not the DC one. A fresh fake has it, so --demo-fresh walks the
@@ -179,6 +189,9 @@ func NewFakeFresh() *Fake {
 	// start beside it. That is the preflight's first condition, and the wizard
 	// opens once the previewed move has been confirmed.
 	f.smbConfInTheWay = true
+	// And the file server the same package enabled, which is the state a Debian
+	// or Ubuntu host provisions from.
+	f.fileServerEnabled = true
 	return f
 }
 
@@ -231,6 +244,24 @@ func (f *Fake) EnableServiceCommand() (runner.Command, bool) {
 	return runner.Command{
 		Argv:        []string{"systemctl", "enable", "--now", "samba-ad-dc.service"},
 		Description: "Enable and start samba-ad-dc.service",
+	}, true
+}
+
+// FileServerDisableCommand offers the step a Debian or Ubuntu host needs, with
+// the units that distribution enables, and stops offering it once the step has
+// run — so the demo shows a chain that shortens as it is walked rather than one
+// that repeats.
+func (f *Fake) FileServerDisableCommand() (runner.Command, bool) {
+	f.mu.Lock()
+	enabled := f.fileServerEnabled
+	f.mu.Unlock()
+	if !enabled {
+		return runner.Command{}, false
+	}
+	return runner.Command{
+		Argv:        append([]string{"systemctl", "disable", "--now"}, fileServerUnits...),
+		Description: "Stop and disable " + strings.Join(fileServerUnits, " and "),
+		Destructive: true,
 	}, true
 }
 
@@ -460,6 +491,15 @@ func (f *Fake) apply(cmd runner.Command) (string, error) {
 	// The non-samba commands the tool offers, each the way the real program
 	// answers it: quietly, so the status line shows the description rather than
 	// a wall of output.
+	if len(args) > 1 && args[0] == "systemctl" && args[1] == "disable" {
+		if !f.fileServerEnabled {
+			return "", fmt.Errorf(
+				"systemctl: Unit file %s does not exist", args[len(args)-1])
+		}
+		f.fileServerEnabled = false
+		return "Removed /etc/systemd/system/multi-user.target.wants/smbd.service.\n" +
+			"Removed /etc/systemd/system/multi-user.target.wants/nmbd.service.\n", nil
+	}
 	if len(args) > 0 && args[0] == "systemctl" {
 		if !f.provisioned {
 			return "", fmt.Errorf("there is no domain to start yet")
@@ -472,6 +512,14 @@ func (f *Fake) apply(cmd runner.Command) (string, error) {
 			return "", fmt.Errorf(
 				"systemctl: Job for samba-ad-dc.service failed because the " +
 					"control process exited with error code")
+		}
+		if f.fileServerEnabled {
+			// The other refusal, and the other reason the order matters: the
+			// file server holds 139 and 445, so the controller's own smbd cannot
+			// bind them and the unit exits saying only this much.
+			return "", fmt.Errorf(
+				"systemctl: Job for samba-ad-dc.service failed: " +
+					"samba_terminate: smbd child process exited")
 		}
 		f.serviceEnabled = true
 		return "Created symlink /etc/systemd/system/multi-user.target.wants/" +

@@ -63,29 +63,95 @@ host is a domain controller — the domain screen says so and `P` starts.
 
 ### The preflight
 
-Two conditions decide whether provisioning can work at all, and both used to be
-found late: one after the realm had been typed twice and the command confirmed,
-the other most of the way into a provision that then died in a Python traceback.
-They are checked before the first question, and a host where neither holds sees
-no extra screen — the wizard opens exactly as it did before.
+The conditions that decide whether provisioning can work at all are checked
+before the first question, because every one of them used to be found late: one
+after the realm had been typed twice and the command confirmed, the rest
+somewhere inside a provision that had already been building a directory for
+minutes. A host where none of them holds sees no extra screen — the wizard opens
+exactly as it did before.
 
-- **A distribution's own `/etc/samba/smb.conf`.** Fedora's `samba` package ships
-  one with `security = user`, which `testparm` resolves to `server role = auto`,
-  and provision refuses to start unless the resolved role is already the DC one.
-  The tool offers the way out as a previewed command like any other change:
-  `mv /etc/samba/smb.conf /etc/samba/smb.conf.orig`. Provision then writes its
-  own — which is also why the confirm says plainly that a file server's
-  configuration is what is being moved aside. If `smb.conf.orig` already exists
-  the file is **not** moved: the tool says so and leaves that one to you, because
-  one previewed command must never overwrite a saved configuration.
-- **The AD provisioning data.** `samba-tool` comes from one package and the AD
-  schema from another, and without the schema provision fails part of the way in
-  on a missing `.ldf` file. A `stat` of `/usr/share/samba/setup/ad-schema/`
-  answers it first. On Fedora and RHEL the packages are `samba-dc-provision` and
-  `samba-dc`, verified with `dnf provides`; on a distribution whose package names
-  have not been verified the tool names the missing path and says it does not
-  know the package rather than guessing. Nothing is offered to confirm either
-  way: installing packages is not this tool's job.
+Each is a fact on disk, and the screen says which fact it read. Nothing is
+installed by this tool, ever: the conditions a person has to clear are stated
+with the package that carries the missing piece **on this distribution**, and on
+a distribution whose package names have not been verified the tool names the
+path it looked at and says it does not know the package rather than guessing
+one.
+
+- **A distribution's own `/etc/samba/smb.conf`.** Fedora's and Ubuntu's `samba`
+  package ships one with `security = user`, which `testparm` resolves to
+  `server role = auto`, and provision refuses to start unless the resolved role
+  is already the DC one. The tool offers the way out as a previewed command like
+  any other change: `mv /etc/samba/smb.conf /etc/samba/smb.conf.orig`. Provision
+  then writes its own — which is also why the confirm says plainly that a file
+  server's configuration is what is being moved aside. If `smb.conf.orig`
+  already exists the file is **not** moved: the tool says so and leaves that one
+  to you, because one previewed command must never overwrite a saved
+  configuration. Arch ships no `smb.conf` at all, and the condition does not
+  appear there.
+- **The AD provisioning data.** `samba-tool` and the AD schema come from
+  different packages on two of the three distributions, and without the schema
+  provision fails part of the way in on a missing `.ldf` file. A `stat` of
+  `/usr/share/samba/setup/ad-schema/` answers it first.
+- **What a provision needs beyond samba-tool and the schema** — the five pieces
+  in the table below, as **one** condition with a list in it. Each was found by a
+  provision that ran for minutes and then died, and each is checked without
+  asking a package manager anything: a `.so` is in samba's module directory or it
+  is not, `python3` can find a module or it cannot, `winbindd` is on disk or it is
+  not. It is one condition rather than five because five paragraphs made a notice
+  seventy lines long that a 44-row terminal could not show (the lab run that
+  found this lost the title off the top of the box), and because what a reader
+  needs from it is one line of package names they can install in one go. It is
+  reported only on a host that already has an AD DC unit file: on Fedora and Arch
+  every one of these arrives with the AD DC package itself, so before that is
+  installed they would all be listed under the condition that already says to
+  install it. On Debian and Ubuntu the unit comes from `samba`, which such a host
+  has installed before it ever looks for `samba-tool`, and there the gaps are
+  real — `samba-ad-provision`, `samba-dsdb-modules` and `samba-vfs-modules` are
+  only `Recommends` of `samba` and `winbind` is only a `Suggests`. (The two python
+  modules are the exception there: `python3-samba` depends on `python3-markdown`
+  and `samba-common-bin` on `python3-cryptography`, so a host with `samba-tool`
+  has both and the probe says so. The missing-module failures are Arch's, whose
+  `samba` depends on neither.)
+
+| What is missing | How it is read | Fedora, RHEL | Debian, Ubuntu | Arch |
+| --- | --- | --- | --- | --- |
+| the AD schema | `stat /usr/share/samba/setup/ad-schema` | `samba-dc-provision` | `samba-ad-provision` | `samba` |
+| the AD DC daemon | the unit file on disk | `samba-dc` (`samba.service`) | `samba` (`samba-ad-dc.service`) | `samba` (`samba.service`) |
+| `ldb/samba_secrets.so` | `stat` in samba's module directory | `samba-dc` | `samba-dsdb-modules` | `ldb` |
+| `vfs/acl_xattr.so` | `stat` in samba's module directory | `samba` | `samba-vfs-modules` | `samba` |
+| the python `cryptography` module | `python3` is asked to find it | `python3-cryptography` | `python3-cryptography` | `python-cryptography` |
+| the python `markdown` module | `python3` is asked to find it | `python3-markdown` | `python3-markdown` | `python-markdown` |
+| `winbindd` | `stat /usr/sbin/winbindd`, `/usr/bin/winbindd` | `samba-winbind` | `winbind` | `samba` |
+
+Every name in that table was read off a lab guest with that distribution's own
+question about the file itself — `rpm -qf` on Fedora 44, `dpkg -S` on Ubuntu
+24.04.5, `pacman -Qoq` on Omarchy Server 4.0.1 — rather than from documentation.
+A distribution that is not in the table is told the path and nothing else.
+
+What each one costs if it is not caught here, which is how each was found:
+
+- `ldb/samba_secrets.so` — provision reaches `secrets.ldb`, says
+  `Module [samba_secrets] not found`, then dies on `'NoneType' object has no
+  attribute 'startswith'`.
+- `vfs/acl_xattr.so` — `Error loading module …/vfs/acl_xattr.so`, then
+  `create_conn_struct: smbd_vfs_init failed`, at the very end of a provision
+  that had otherwise worked.
+- `cryptography` — no `samba-tool` subcommand runs at all, because samba-tool
+  builds its own subcommand table through it.
+- `markdown` — provision gets as far as `Fixing provision GUIDs` and dies in
+  `forest_update.py` with `ModuleNotFoundError: No module named 'markdown'`.
+- `winbindd` — the provision succeeds and nothing serves the domain: a samba
+  running as an AD DC forks `winbindd`, and when the binary is absent the unit
+  dies in the same second with `/usr/sbin/winbindd: Failed to exec child`.
+
+The python check is the one that is not a `stat`, and it is a process on purpose:
+where a python module lives is the interpreter's business, and the three guests
+put the same two modules in three different directories. Asking `python3` to
+find them costs 27ms on each of them, and `samba-tool`'s shebang is
+`#!/usr/bin/python3` on all three, so the question is the one samba-tool would
+otherwise answer with a traceback. Where there is no `python3` to ask, nothing is
+reported: absence cannot be proved without an interpreter, and a false condition
+here would block the wizard.
 
 ### The wizard
 
@@ -132,8 +198,25 @@ each, in the order that ends with a running controller:
    with nothing in the journal but `mitkdc child process exited`. Where the
    drop-in does not apply, the screen keeps the old note — merge the generated
    file yourself, and do not symlink it.
-2. `systemctl enable --now samba-ad-dc.service` (or `samba.service` — the unit is
+2. `systemctl disable --now smbd.service nmbd.service` — only where those units
+   are both installed and enabled, which on a Debian or Ubuntu host is what
+   installing `samba` left behind. They hold 139 and 445; a domain controller
+   runs its own `smbd` on those ports, so while they are up the AD DC unit
+   starts and exits again with nothing in the journal but `smbd child process
+   exited`. It is **one** step and not two, and it names only the units this host
+   actually has enabled: they are one fact — this host serves files — and a
+   confirm that stopped `smbd` and left `nmbd` enabled would leave the
+   controller exactly as unable to start, so it would be a dialog that cannot
+   succeed on its own.
+3. `systemctl enable --now samba-ad-dc.service` (or `samba.service` — the unit is
    detected per distribution), which starts the controller.
+
+Which of the three a host is offered is a fact about the distribution, and the
+lab matrix measured it: Fedora 44 needs the first and not the second (MIT KDC,
+`smbd.service` not shipped), Ubuntu 24.04 the second and not the first (embedded
+Heimdal, no `/etc/krb5.conf.d`), Omarchy Server 4.0.1 neither. `--demo-fresh`
+walks all three, because the fake machine has both conditions and refuses to
+start its unit until each has been cleared.
 
 A provision that fails gets the same full-screen notice a successful one does,
 with the tail of its transcript: it prints hundreds of lines before it fails and

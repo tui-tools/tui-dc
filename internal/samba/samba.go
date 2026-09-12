@@ -38,6 +38,10 @@
 //	install … /etc/krb5.conf.d/…     the Kerberos configuration provision
 //	                                 generated, which an MIT KDC build needs
 //	                                 before the unit will start at all
+//	systemctl disable --now smbd …   the distribution's own file server, whose
+//	                                 ports the controller's own smbd must bind
+//	                                 (Debian and Ubuntu enable it; see
+//	                                 FileServerDisable)
 //	systemctl enable --now <unit>    the daemon itself
 //
 // Each is offered, previewed and confirmed like everything else, and the two
@@ -314,6 +318,16 @@ func (r *Real) Krb5DropInCommand(generated string) (runner.Command, bool) {
 		return runner.Command{}, false
 	}
 	return Krb5DropIn(generated)
+}
+
+// FileServerDisableCommand is the previewed step that stops and disables the
+// distribution's own file server units, offered only where this host has them
+// enabled and can run systemctl. See FileServerDisable for why it is one step.
+func (r *Real) FileServerDisableCommand() (runner.Command, bool) {
+	if r.helpers["systemctl"] == nil {
+		return runner.Command{}, false
+	}
+	return FileServerDisable()
 }
 
 // EnableServiceCommand is the previewed `systemctl enable --now <unit>`

@@ -131,6 +131,35 @@ paths, which name no machine.
 | `domain-provision-role-refused.txt` | `domain provision` refused because smb.conf resolves to another server role |
 | `domain-provision-schema-missing.txt` | `domain provision` dying on the missing AD schema, on a multi-address host |
 
+### The python probe's own answer
+
+`python-probe-missing.txt` is not samba-tool output: it is what the preflight's
+own python probe printed, captured on the lab's Ubuntu 24.04.5 guest. The command
+was the constant in `preflight.go`, run the way the tool runs it:
+
+```sh
+python3 -c '<pythonProbe>' cryptography markdown
+```
+
+One line, `markdown`, and nothing else — and that is the asymmetry worth keeping:
+`cryptography` was importable on that host and `markdown` was not, which is the
+shape of the answer the parser has to read (the names it asked for, in the order
+it asked, and only those).
+
+How the host got there is worth writing down too, because it is not the state
+`lab.sh dc seed` leaves: `python3-markdown` was removed, and on Ubuntu 24.04.5
+that removes `samba` with it, since `python3-samba` *depends* on the module. So a
+seeded guest there always has both modules, and the missing-module failures of
+[tui-dc#20](https://github.com/tui-tools/tui-dc/issues/20) are Arch's, whose
+`samba` package depends on neither. What this fixture holds is the probe's output
+on a host where a module is absent, which is the same bytes on any distribution.
+
+Nothing was scrubbed: the file is one word long and names no machine.
+
+| File | Command |
+| --- | --- |
+| `python-probe-missing.txt` | the preflight's python probe, markdown absent, Ubuntu 24.04.5 |
+
 ## Captured values, reproduced preamble
 
 Two files are a hybrid, and the split has to be stated because the answer in

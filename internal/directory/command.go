@@ -487,6 +487,12 @@ type Backend interface {
 	// directory or already configures a realm of its own: then the generated
 	// file is a merge for a person to do, not a file to drop in.
 	Krb5DropInCommand(generated string) (runner.Command, bool)
+	// FileServerDisableCommand is the previewable step that stops and disables
+	// the distribution's own file server units before the controller is
+	// started. False where this host has none of them enabled — which is every
+	// host but a Debian or Ubuntu one, where installing samba enables smbd and
+	// nmbd and they hold the ports the AD DC's own smbd has to bind.
+	FileServerDisableCommand() (runner.Command, bool)
 	// EnableServiceCommand is the previewable `systemctl enable --now <unit>`
 	// offered after a successful provision, with the unit name this
 	// distribution gives the AD DC daemon. False when systemd or the unit
