@@ -68,6 +68,35 @@ The bare-line shape older samba prints is covered by a literal in
 | --- | --- |
 | `domain-provision.txt` | `samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB --server-role=dc --dns-backend=SAMBA_INTERNAL` |
 
+### The two refusals the preflight exists for
+
+Both captured from the same Fedora 44 host, samba 4.24.6, each from a provision
+that was started and refused — which is the whole point of having them: these
+are the bytes the tool has to recognise before a wizard is worth opening, and
+the second one is also where samba's WARNING lines live.
+
+`domain-provision-role-refused.txt` is a provision started with the
+distribution's own `/etc/samba/smb.conf` still in place (`security = user`,
+which `testparm` resolves to `server role = auto`). Nothing had been written
+when it refused.
+
+`domain-provision-schema-missing.txt` is a provision on a host with `samba` and
+`samba-tools` installed and `samba-dc-provision` not: it runs for most of a
+minute and then raises a bare `FileNotFoundError` on one of the AD schema `.ldf`
+files. It was captured on a host with several IPv4 addresses, so it also carries
+the two WARNING lines the result screen repeats — the chosen address and the
+absent IPv6.
+
+Scrubbed the same way as the transcript above: timestamps and pid flattened,
+addresses replaced with documentation ones (`192.168.10.0/24`), realm and host
+names the documentation ones. The Python traceback frames are samba's own file
+paths, which name no machine.
+
+| File | What it is |
+| --- | --- |
+| `domain-provision-role-refused.txt` | `domain provision` refused because smb.conf resolves to another server role |
+| `domain-provision-schema-missing.txt` | `domain provision` dying on the missing AD schema, on a multi-address host |
+
 ## Constructed
 
 Three files could **not** be captured. `samba-tool domain provision` panics at

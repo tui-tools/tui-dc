@@ -44,8 +44,22 @@ type Fake struct {
 	records   []directory.Record
 	policy    fakePolicy
 
-	// serviceEnabled is whether the previewed `systemctl enable --now` ran.
+	// serviceEnabled is whether the previewed `systemctl enable --now` ran, and
+	// krb5DropIn whether the previewed `install` of the generated Kerberos
+	// configuration ran.
 	serviceEnabled bool
+	krb5DropIn     bool
+
+	// smbConfInTheWay is the preflight's first condition, on a fake machine:
+	// the distribution's own /etc/samba/smb.conf, claiming a server role that
+	// is not the DC one. A fresh fake has it, so --demo-fresh walks the
+	// preflight and the previewed `mv` that clears it; confirming that command
+	// clears it here too, and the wizard then opens.
+	//
+	// It is state rather than a stat of the real machine on purpose: a demo
+	// whose screens depended on the host running it would show a different
+	// thing on every machine, and that is the one thing a demo must not do.
+	smbConfInTheWay bool
 }
 
 // fakePolicy is the sample domain's password policy, held as the values
@@ -160,6 +174,11 @@ func NewFakeFresh() *Fake {
 	f := NewFake()
 	f.provisioned = false
 	f.realm, f.netbios = "", ""
+	// The machine a first boot actually starts from: the distribution's samba
+	// package is installed, so its smb.conf is there and provision will not
+	// start beside it. That is the preflight's first condition, and the wizard
+	// opens once the previewed move has been confirmed.
+	f.smbConfInTheWay = true
 	return f
 }
 
@@ -212,6 +231,36 @@ func (f *Fake) EnableServiceCommand() (runner.Command, bool) {
 	return runner.Command{
 		Argv:        []string{"systemctl", "enable", "--now", "samba-ad-dc.service"},
 		Description: "Enable and start samba-ad-dc.service",
+	}, true
+}
+
+// ProvisionPreflight answers the preflight's reads from this fake machine's own
+// state rather than from the host, so --demo shows the same screens everywhere.
+// The condition it reports carries the same previewed command the real backend
+// builds, through the same constructor, because a demo of a different command
+// would be a demo of nothing.
+func (f *Fake) ProvisionPreflight(serverRole string) directory.Preflight {
+	f.mu.Lock()
+	inTheWay := f.smbConfInTheWay
+	f.mu.Unlock()
+	if !inTheWay {
+		return directory.Preflight{}
+	}
+	condition := smbConfAsideCondition(serverRole, false)
+	return directory.Preflight{Conditions: []directory.PreflightCondition{condition}}
+}
+
+// Krb5DropInCommand offers the Kerberos step the way a host with an
+// /etc/krb5.conf.d and no realm of its own does — which is the host the ordered
+// follow-up exists for, and therefore the one the demo has to be, or the step
+// would never be walked.
+func (f *Fake) Krb5DropInCommand(generated string) (runner.Command, bool) {
+	if generated == "" {
+		return runner.Command{}, false
+	}
+	return runner.Command{
+		Argv:        []string{"install", "-m", "644", generated, krb5DropInPath},
+		Description: "Install the generated Kerberos configuration as " + krb5DropInPath,
 	}, true
 }
 
@@ -368,15 +417,42 @@ func (f *Fake) apply(cmd runner.Command) (string, error) {
 	defer f.mu.Unlock()
 
 	args := cmd.Argv
-	// The one non-samba command the tool offers: the service step after a
-	// provision.
+	// The non-samba commands the tool offers, each the way the real program
+	// answers it: quietly, so the status line shows the description rather than
+	// a wall of output.
 	if len(args) > 0 && args[0] == "systemctl" {
 		if !f.provisioned {
 			return "", fmt.Errorf("there is no domain to start yet")
 		}
+		if !f.krb5DropIn {
+			// The refusal this fake exists to reproduce: on a build that runs the
+			// MIT KDC the unit exits at startup until the generated Kerberos
+			// configuration is where the KDC reads it. That is why the result
+			// screen offers the two steps in this order.
+			return "", fmt.Errorf(
+				"systemctl: Job for samba-ad-dc.service failed because the " +
+					"control process exited with error code")
+		}
 		f.serviceEnabled = true
 		return "Created symlink /etc/systemd/system/multi-user.target.wants/" +
 			"samba-ad-dc.service → /usr/lib/systemd/system/samba-ad-dc.service.\n", nil
+	}
+	if len(args) > 0 && args[0] == "mv" {
+		if !f.smbConfInTheWay {
+			return "", fmt.Errorf("mv: cannot stat '%s': No such file or directory",
+				smbConfPath)
+		}
+		f.smbConfInTheWay = false
+		return "", nil
+	}
+	if len(args) > 0 && args[0] == "install" {
+		if !f.provisioned {
+			return "", fmt.Errorf(
+				"install: cannot stat '%s': No such file or directory",
+				args[len(args)-2])
+		}
+		f.krb5DropIn = true
+		return "", nil
 	}
 	if len(args) < 3 || args[0] != directory.Bin {
 		return "", fmt.Errorf("samba-tool: cannot parse %q", cmd.String())
@@ -664,13 +740,25 @@ func (f *Fake) provision(args []string) (string, error) {
 			"ERROR(ldb): uncaught exception - Failed to connect to " +
 				"'sam.ldb': a domain already exists on this machine")
 	}
-	realm, netbios := "", ""
+	if f.smbConfInTheWay {
+		// The refusal the preflight exists for, in samba's own words.
+		return "", fmt.Errorf(
+			"ERROR(<class 'samba.provision.ProvisioningError'>): Provision failed " +
+				"- ProvisioningError: guess_names: 'server role=auto' in " +
+				smbConfPath + " must match chosen server role 'active directory " +
+				"domain controller'!  Please remove the smb.conf file and let " +
+				"provision generate it")
+	}
+	realm, netbios, hostIP := "", "", ""
 	for _, arg := range args[3:] {
 		if v, ok := strings.CutPrefix(arg, "--realm="); ok {
 			realm = strings.ToLower(v)
 		}
 		if v, ok := strings.CutPrefix(arg, "--domain="); ok {
 			netbios = strings.ToUpper(v)
+		}
+		if v, ok := strings.CutPrefix(arg, "--host-ip="); ok {
+			hostIP = v
 		}
 	}
 	if realm == "" || netbios == "" {
@@ -687,10 +775,28 @@ func (f *Fake) provision(args []string) (string, error) {
 	for _, record := range populated.records {
 		record.Data = strings.ReplaceAll(record.Data, "lab.example", realm)
 		record.Data = strings.ReplaceAll(record.Data, "lab", strings.ToLower(netbios))
+		if hostIP != "" && record.Type == "A" {
+			// The address the wizard was given is the address that lands in the
+			// DC's own A record. That is the whole reason the question exists.
+			record.Data = hostIP
+		}
 		f.records = append(f.records, record)
 	}
 
-	return "Looking up IPv4 addresses\n" +
+	// The warnings a real provision prints, which the result screen repeats.
+	// The multi-address one appears exactly when the wizard did not say which
+	// address to serve, because that is when samba picks for itself.
+	warnings := "WARNING 2026-01-01 10:00:00,106 pid:1234 " +
+		"/usr/lib64/python3.14/site-packages/samba/provision/__init__.py " +
+		"#2204: No IPv6 address will be assigned\n"
+	if hostIP == "" {
+		warnings += "WARNING 2026-01-01 10:00:00,107 pid:1234 " +
+			"/usr/lib64/python3.14/site-packages/samba/provision/__init__.py " +
+			"#2122: More than one IPv4 address found. Using 10.10.0.10\n"
+	}
+
+	return warnings +
+		"Looking up IPv4 addresses\n" +
 		"Setting up secrets.ldb\n" +
 		"Setting up the registry\n" +
 		"Setting up idmap db\n" +

@@ -5,6 +5,7 @@ package samba
 
 import (
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/tui-tools/tui-dc/internal/directory"
@@ -50,6 +51,13 @@ type ProvisionResult struct {
 	// Summary is the block of facts provision reports (server role, DNS
 	// domain, domain SID …), for the result screen.
 	Summary []string
+	// Warnings are the WARNING lines provision printed, message only. They are
+	// facts about the domain that was just created rather than noise: this is
+	// where "More than one IPv4 address found. Using …" appears when the wizard
+	// was not told which address to serve, and where "No IPv6 address will be
+	// assigned" appears on a host with no IPv6 — both worth reading once,
+	// neither visible anywhere afterwards.
+	Warnings []string
 }
 
 // provisionSummaryLabels are the facts the result screen repeats, in the order
@@ -79,6 +87,10 @@ func ParseProvisionOutput(out string) ProvisionResult {
 			}
 			continue
 		}
+		if message, ok := warningMessage(line); ok {
+			result.Warnings = append(result.Warnings, message)
+			continue
+		}
 		if idx := strings.Index(line, "has been generated at"); idx >= 0 &&
 			strings.Contains(line, "Kerberos") {
 			result.Krb5Conf = strings.TrimSpace(line[idx+len("has been generated at"):])
@@ -93,6 +105,28 @@ func ParseProvisionOutput(out string) ProvisionResult {
 		}
 	}
 	return result
+}
+
+// logPrefixRe matches the prefix samba's own logger puts in front of every
+// line on 4.24: `WARNING <date> pid:<n> <file> #<line>: `. The message is what
+// a reader needs; the file and line number of a Python source file are not.
+var logPrefixRe = regexp.MustCompile(`^[A-Z]+ .*#[0-9]+: `)
+
+// warningMessage returns the message of a WARNING line, without the logger's
+// prefix. A line that only mentions the word in passing is not one: the level
+// is the first word samba prints, so that is where it is looked for.
+func warningMessage(line string) (string, bool) {
+	if !strings.HasPrefix(line, "WARNING") {
+		return "", false
+	}
+	if prefix := logPrefixRe.FindString(line); prefix != "" {
+		message := strings.TrimSpace(line[len(prefix):])
+		return message, message != ""
+	}
+	// Older samba prints the level and the message with nothing between them.
+	message := strings.TrimSpace(strings.TrimPrefix(
+		strings.TrimPrefix(line, "WARNING"), ":"))
+	return message, message != ""
 }
 
 // labelled finds a label anywhere in a line and returns what follows it, plus

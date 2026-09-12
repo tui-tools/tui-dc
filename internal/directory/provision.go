@@ -23,6 +23,54 @@ type Provision struct {
 	// Forwarder is an optional DNS forwarder IP, only meaningful with the
 	// internal DNS server. Empty means none.
 	Forwarder string
+
+	// HostIP is the IPv4 address this controller serves on: the address that
+	// goes into the DC's own A record. Empty leaves the choice to samba, which
+	// is only safe on a host that has exactly one address — see hostip.go.
+	HostIP string
+	// Iface is the interface that owns HostIP. It is not a question of its
+	// own: it is derived from the address, and it decides what the DC binds.
+	Iface string
+}
+
+// PreflightCondition is one thing that stops `samba-tool domain provision`
+// from working on this host, found before the wizard asks anything.
+//
+// Two shapes, and the difference is the point. A condition the tool can clear
+// carries Fix: one previewed command, confirmed like every other change. A
+// condition it cannot clear carries none and is simply stated — installing a
+// package is not this tool's job, and a tool that offered to would be guessing
+// at a package manager it never drives.
+type PreflightCondition struct {
+	// Title names the condition in one line.
+	Title string
+	// Detail is what it means and what to do about it, one line per element.
+	Detail []string
+	// Fix is the command that clears it, or nil when only a person can.
+	Fix *runner.Command
+	// FixBody is what the confirm dialog says about Fix before it runs.
+	FixBody string
+}
+
+// Preflight is what the checks found. No conditions means the wizard opens
+// exactly as it did before any of this existed, which is the common case: a
+// host where nothing is wrong must not be made to read a screen.
+type Preflight struct {
+	Conditions []PreflightCondition
+}
+
+// OK reports that provisioning can be attempted.
+func (p Preflight) OK() bool { return len(p.Conditions) == 0 }
+
+// Fixable returns the conditions that carry a previewed command, in order.
+func (p Preflight) Fixable() []PreflightCondition {
+	var fixable []PreflightCondition
+	for _, condition := range p.Conditions {
+		if condition.Fix != nil {
+			fixable = append(fixable, condition)
+		}
+	}
+	return fixable
 }
 
 // The DNS backends the wizard offers. samba-tool also knows BIND9_FLATFILE
@@ -123,6 +171,49 @@ func ValidateForwarder(ip string) error {
 	return nil
 }
 
+// ValidateHostIP checks the address this controller will serve on: empty, or
+// one IPv4 address. IPv6 is refused rather than passed through because this is
+// the value of `--host-ip`, and samba takes an IPv6 address only through
+// `--host-ip6`, which this wizard does not collect.
+func ValidateHostIP(ip string) error {
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
+		return nil
+	}
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return fmt.Errorf("%q is not an IP address", ip)
+	}
+	if parsed.To4() == nil {
+		return fmt.Errorf("%q is an IPv6 address, and --host-ip takes an IPv4 one", ip)
+	}
+	return nil
+}
+
+// ValidateInterface checks an interface name before it becomes part of an
+// smb.conf parameter. It matters more than it looks: the name lands inside a
+// single `--option=interfaces=lo <name>` argument, so a value carrying a space
+// or an equals sign would not be a second interface, it would be a second
+// smb.conf setting this tool never meant to write.
+func ValidateInterface(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	if len(name) > 64 {
+		return fmt.Errorf("%q is not an interface name", name)
+	}
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') &&
+			r != '-' && r != '_' && r != '.' && r != ':' && r != '@' {
+			return fmt.Errorf(
+				"the interface name %q contains %q — that cannot go into an "+
+					"smb.conf parameter", name, string(r))
+		}
+	}
+	return nil
+}
+
 // DeriveNetBIOS suggests the short name a realm implies: its first label,
 // uppercased and clipped to 15 characters. It is a suggestion for the wizard's
 // prompt, not a rule — the user can type over it.
@@ -158,6 +249,17 @@ func (p Provision) Validate() error {
 	if p.Forwarder != "" && p.DNSBackend != DNSBackendInternal {
 		return fmt.Errorf("a DNS forwarder only means something to %s", DNSBackendInternal)
 	}
+	if err := ValidateHostIP(p.HostIP); err != nil {
+		return err
+	}
+	if err := ValidateInterface(p.Iface); err != nil {
+		return err
+	}
+	if p.Iface != "" && p.HostIP == "" {
+		return fmt.Errorf(
+			"an interface to bind without an address to serve is not an answer " +
+				"this tool builds: the interface is derived from the address")
+	}
 	return nil
 }
 
@@ -177,6 +279,8 @@ func BuildProvisionCommand(p Provision) (runner.Command, error) {
 	p.NetBIOS = strings.ToUpper(strings.TrimSpace(p.NetBIOS))
 	p.DNSBackend = strings.TrimSpace(p.DNSBackend)
 	p.Forwarder = strings.TrimSpace(p.Forwarder)
+	p.HostIP = strings.TrimSpace(p.HostIP)
+	p.Iface = strings.TrimSpace(p.Iface)
 	if err := p.Validate(); err != nil {
 		return runner.Command{}, err
 	}
@@ -185,6 +289,27 @@ func BuildProvisionCommand(p Provision) (runner.Command, error) {
 		"--domain=" + p.NetBIOS,
 		"--server-role=dc",
 		"--dns-backend=" + p.DNSBackend,
+	}
+	if p.HostIP != "" {
+		// Without this samba picks one of the host's addresses and warns that it
+		// did, and the one it picked is what lands in the DC's own A record.
+		argv = append(argv, "--host-ip="+p.HostIP)
+	}
+	if p.Iface != "" {
+		// Provision writes neither `interfaces` nor `bind interfaces only`, so
+		// the DC tries every address on the host — and a host where libvirt's or
+		// another bridge's dnsmasq already holds port 53 on one of them gets a
+		// daemon that never starts. The answer is implied by the address the
+		// wizard was given: the interface that owns it, plus loopback, which the
+		// controller's own clients and samba's internal tools use.
+		//
+		// Both are smb.conf parameters rather than provision flags, so they
+		// travel the same way the forwarder does: one --option argument each,
+		// the space in the parameter name kept in the argv and quoted only by
+		// the preview.
+		argv = append(argv,
+			"--option=interfaces=lo "+p.Iface,
+			"--option=bind interfaces only=yes")
 	}
 	if p.Forwarder != "" {
 		// There is no --dns-forwarder: `samba-tool domain provision` takes

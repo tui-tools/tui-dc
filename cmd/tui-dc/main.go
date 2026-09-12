@@ -7,14 +7,20 @@
 // of it without changing anything. Every change is one `samba-tool` command,
 // shown in full and confirmed before it runs.
 //
-// On a machine that has samba-tool and no domain, it can create one: the
-// provision wizard collects the realm, the NetBIOS name, the DNS backend and
-// an optional forwarder, previews the exact `samba-tool domain provision`
-// command — with no `--adminpass` in it, so samba-tool generates the
-// Administrator password itself and prints it exactly once — and asks for the
-// realm to be typed back before it will run. It still does not join or demote
-// a domain: both touch a trust relationship with another controller, and are
-// worth reading in a shell where they can be checked twice.
+// On a machine that has samba-tool and no domain, it can create one. A
+// preflight runs first, because two conditions decide whether provisioning can
+// work at all and both used to be discovered late: a distribution's own
+// /etc/samba/smb.conf, which provision refuses to start beside, and the AD
+// schema package, without which it dies part of the way in. Then the wizard
+// collects the realm, the NetBIOS name, the DNS backend, an optional forwarder
+// and the address this controller serves on, previews the exact `samba-tool
+// domain provision` command — with no `--adminpass` in it, so samba-tool
+// generates the Administrator password itself and prints it exactly once — and
+// asks for the realm to be typed back before it will run. What follows is a
+// short chain of previewed steps that ends with a controller that is actually
+// serving. It still does not join or demote a domain: both touch a trust
+// relationship with another controller, and are worth reading in a shell where
+// they can be checked twice.
 package main
 
 import (
