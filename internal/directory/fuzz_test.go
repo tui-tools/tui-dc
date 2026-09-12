@@ -125,10 +125,12 @@ func FuzzBuildCommand(f *testing.F) {
 }
 
 // knownWords are the fixed words BuildCommand writes itself: the program, the
-// subcommand nouns and their verbs. Anything else in an argv came from the
+// subcommand nouns and their verbs, and the one single-dash flag it adds — the
+// RPC commands' machine-account flag. Anything else in an argv came from the
 // input, and the target above checks exactly that.
 var knownWords = map[string]bool{
-	Bin: true, "user": true, "group": true, "dns": true, "domain": true,
+	MachineAccountFlag: true,
+	Bin:                true, "user": true, "group": true, "dns": true, "domain": true,
 	"create": true, "delete": true, "enable": true, "disable": true,
 	"setpassword": true, "setexpiry": true, "add": true,
 	"addmembers": true, "removemembers": true,

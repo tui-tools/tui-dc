@@ -23,7 +23,10 @@
 // machine — so account creation and password resets ask samba-tool for a
 // random password and show what it printed, and provisioning omits
 // `--adminpass` entirely so samba-tool generates the Administrator password
-// itself and prints it exactly once.
+// itself and prints it exactly once. The commands that do need to authenticate
+// — `dns` and `drs`, the only two that leave the local database for an RPC call
+// — use the machine account this host already has, with samba-tool's `-P`; see
+// directory.MachineAccountFlag.
 //
 // Provisioning is the one moment this backend drives a second program:
 // `systemctl enable --now <unit>` is offered — previewed and confirmed like
@@ -310,6 +313,18 @@ func (r *Real) Load(ctx context.Context) (directory.Model, error) {
 func loadDomain(ctx context.Context, read readFunc, server string) (directory.Model, string) {
 	model := directory.Model{}
 
+	// readRPC is the two reads that leave the local database: `dns query` is a
+	// DNS RPC call and `drs showrepl` a DRS one, both authenticated against the
+	// running controller rather than answered out of `sam.ldb`. They carry
+	// directory.MachineAccountFlag for the reason written there; everything
+	// else on this path deliberately does not, because a read of the local
+	// database needs no credentials and a flag on it would only suggest
+	// otherwise.
+	readRPC := func(ctx context.Context, args ...string) (string, error) {
+		return read(ctx, append(append([]string(nil), args...),
+			directory.MachineAccountFlag)...)
+	}
+
 	version, err := read(ctx, "--version")
 	if err != nil {
 		model.Detail = runner.FirstLine(err.Error())
@@ -400,7 +415,7 @@ func loadDomain(ctx context.Context, read readFunc, server string) (directory.Mo
 		// would produce a usage error rather than a useful note.
 		model.Notes = append(model.Notes,
 			"dns query: the domain's zone name is not known yet")
-	} else if out, err := read(ctx, "dns", "query", server, zone, "@", "ALL"); err != nil {
+	} else if out, err := readRPC(ctx, "dns", "query", server, zone, "@", "ALL"); err != nil {
 		model.Notes = append(model.Notes, "dns query: "+runner.FirstLine(err.Error()))
 	} else {
 		model.Zone.Records = ParseDNSQuery(out)
@@ -408,7 +423,12 @@ func loadDomain(ctx context.Context, read readFunc, server string) (directory.Mo
 		directory.SortRecords(model.Zone.Records)
 	}
 
-	if out, err := read(ctx, "drs", "showrepl"); err != nil {
+	// The server is passed explicitly. Left out, samba-tool resolves this
+	// controller's own FQDN through the host resolver, and on a fresh DC that
+	// still resolves upstream the lookup fails — so the one screen whose job is
+	// to report broken replication reported a healthy single-DC domain as
+	// broken. The address is the same one every other read is pointed at.
+	if out, err := readRPC(ctx, "drs", "showrepl", server); err != nil {
 		model.Repl.Detail = runner.FirstLine(err.Error())
 		model.Notes = append(model.Notes, "drs showrepl: "+model.Repl.Detail)
 	} else {

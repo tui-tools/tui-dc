@@ -221,6 +221,25 @@ var ErrNothingSelected = fmt.Errorf("nothing selected")
 // Bin is the one program this tool drives.
 const Bin = "samba-tool"
 
+// MachineAccountFlag is samba-tool's `-P`: authenticate as this machine's own
+// account, from the secrets this host already holds.
+//
+// Most of what the tool runs reads the local directory database directly and
+// needs nobody's credentials — `user list`, `group listmembers`,
+// `computer show`, `domain level show` all open `sam.ldb` as root and answer.
+// The DNS and DRS subcommands do not: `dns` talks DNS RPC and `drs` talks DRS,
+// both of them authenticated calls to the running controller. Without
+// credentials samba-tool prompts, gets nothing from a TUI, and then tries to
+// log on as `DOMAIN\root`, which is not an account that exists — so every one
+// of those commands fails on a perfectly healthy DC.
+//
+// `-P` is the right answer for a tool that runs on the controller itself: the
+// machine account is already there, already privileged enough for these calls,
+// and no password is typed, stored or placed on a command line. It is written
+// once here so the flag cannot be forgotten on one of the four commands that
+// need it, and so the reason lives next to it.
+const MachineAccountFlag = "-P"
+
 // BuildCommand turns an intent into the exact argv that will run. It is the
 // only place in the tool that assembles a command line, it is shared by the
 // real and the fake backend — so --demo previews exactly what the real thing
@@ -357,7 +376,11 @@ func BuildCommand(spec ActionSpec, in Intent) (runner.Command, error) {
 		if in.Zone == "" || in.Server == "" {
 			return runner.Command{}, fmt.Errorf("no zone to add to")
 		}
-		argv = []string{Bin, "dns", "add", in.Server, in.Zone, node, recordType, data}
+		// The flag goes last, after the positional arguments, which is where
+		// samba-tool's own examples put it and what keeps the preview reading
+		// as the command a reader would type by hand.
+		argv = []string{Bin, "dns", "add", in.Server, in.Zone, node, recordType, data,
+			MachineAccountFlag}
 		description = fmt.Sprintf("Add %s %s %s to %s", node, recordType, data, in.Zone)
 	case DNSDelete:
 		if target == "" || in.Type == "" || in.Data == "" {
@@ -367,7 +390,7 @@ func BuildCommand(spec ActionSpec, in Intent) (runner.Command, error) {
 			return runner.Command{}, fmt.Errorf("no zone to delete from")
 		}
 		argv = []string{Bin, "dns", "delete", in.Server, in.Zone,
-			target, in.Type, in.Data}
+			target, in.Type, in.Data, MachineAccountFlag}
 		description = fmt.Sprintf("Delete %s %s %s from %s",
 			target, in.Type, in.Data, in.Zone)
 
