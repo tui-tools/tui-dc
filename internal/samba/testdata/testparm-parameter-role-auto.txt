@@ -1,0 +1,3 @@
+INFO 2026-09-12 10:14:02,118 pid:1482 /usr/lib/python3/dist-packages/samba/netcmd/testparm.py #96: Loaded smb config files from /etc/samba/smb.conf
+INFO 2026-09-12 10:14:02,118 pid:1482 /usr/lib/python3/dist-packages/samba/netcmd/testparm.py #97: Loaded services file OK.
+auto

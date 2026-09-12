@@ -6,6 +6,7 @@
 //
 //	--version                 whether there is a Samba here at all
 //	testparm                  this host's own role, realm and DNS backend
+//	testparm --parameter-name the role, where smb.conf only implies it
 //	domain info <server>      whether a controller answers, and which one
 //	domain level show         the functional levels
 //	user list / user show     the accounts, and one account in full
@@ -412,6 +413,40 @@ func loadDomain(ctx context.Context, read readFunc, server string) (directory.Mo
 		}
 		if workgroup != "" {
 			model.Domain.NetBIOS = workgroup
+		}
+
+		// The role is the one fact the read above can miss. `testparm` prints
+		// the parameters smb.conf sets, and a distribution's smb.conf does not
+		// set the role: Fedora's ships `security = user` and lets the role be
+		// derived, so the parse came back with no role at all on every host
+		// that has not been provisioned yet — which is exactly the host the
+		// provision preflight exists for. Verified on the lab's Fedora 44
+		// guest: against the distribution's own file the role is absent from
+		// the output above and `--parameter-name` answers `auto`.
+		//
+		// The defaults could also be had with `-v`, which prints several
+		// hundred parameters: the effective-parameters view this tool shows is
+		// built from the output above, and flooding it with defaults to learn
+		// one value is a worse trade than one more read. So the one parameter
+		// is asked for by name.
+		//
+		// And it is asked for only when it has to be. A provisioned controller
+		// does set the role in its own smb.conf, so the parse already has it
+		// there; a second samba-tool process per load is a cost this codebase
+		// counts (see the comment on reading accounts, one process each), and
+		// this one is spent only on the hosts whose answer is missing.
+		if model.Domain.ServerRole == "" {
+			// A failure here is deliberately silent: this read only refines a
+			// fact the screen already renders without it, so a host where it
+			// cannot run keeps the empty role and the preflight's fallback
+			// wording rather than gaining a note about a read nobody asked
+			// for.
+			if out, err := read(ctx, "testparm", "--suppress-prompt",
+				"--parameter-name=server role"); err == nil {
+				if role := ParseParameterValue(out); role != "" {
+					model.Domain.ServerRole = role
+				}
+			}
 		}
 	}
 

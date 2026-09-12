@@ -306,6 +306,33 @@ func (f *Fake) read(_ context.Context, args ...string) (string, error) {
 	return f.respond(args)
 }
 
+// parameterName pulls the name out of a `--parameter-name=<name>` argument.
+// The name carries a space ("server role"), which is why it is one argument
+// with an `=` in it and never two.
+func parameterName(args []string) (string, bool) {
+	const flag = "--parameter-name="
+	for _, arg := range args {
+		if strings.HasPrefix(arg, flag) {
+			return strings.TrimSpace(strings.TrimPrefix(arg, flag)), true
+		}
+	}
+	return "", false
+}
+
+// parameterValue is the fake's answer for one parameter. It knows the role,
+// which is the only parameter the read path asks for by name; anything else
+// gets nothing rather than an invented default, so a test that asks for a
+// parameter this fake does not model sees that it does not.
+func (f *Fake) parameterValue(name string) string {
+	if name != "server role" {
+		return ""
+	}
+	if f.provisioned {
+		return "active directory domain controller"
+	}
+	return "standalone server"
+}
+
 // respond renders one subcommand's output. It is deliberately written the way
 // samba-tool prints — trailing spaces in the label column of `domain info`,
 // the `(flags=…, serial=…, ttl=…)` tail on every DNS record, the tab-indented
@@ -314,6 +341,19 @@ func (f *Fake) read(_ context.Context, args ...string) (string, error) {
 func (f *Fake) respond(args []string) (string, error) {
 	if len(args) == 0 {
 		return "", fmt.Errorf("samba-tool: missing subcommand")
+	}
+	// `testparm --parameter-name=<name>` answers one value instead of the file,
+	// and answers it from samba's own defaults when smb.conf is silent — which
+	// is why the read path falls back to it for the server role. It is handled
+	// ahead of the provisioned split because the answer exists either way, and
+	// samba's logger preamble is reproduced with it: a fake whose output were
+	// tidier than samba's would not exercise the parser that has to skip it.
+	if args[0] == "testparm" {
+		if name, ok := parameterName(args); ok {
+			return "INFO 2026-08-30 21:26:46,780 pid:62 " +
+				"/usr/lib/python3/dist-packages/samba/netcmd/testparm.py #97: " +
+				"Loaded services file OK.\n" + f.parameterValue(name) + "\n", nil
+		}
 	}
 	// A machine with samba-tool and no domain answers --version and testparm
 	// and fails everything that needs a directory, with the messages the real

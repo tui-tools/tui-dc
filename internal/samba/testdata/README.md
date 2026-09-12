@@ -131,6 +131,41 @@ paths, which name no machine.
 | `domain-provision-role-refused.txt` | `domain provision` refused because smb.conf resolves to another server role |
 | `domain-provision-schema-missing.txt` | `domain provision` dying on the missing AD schema, on a multi-address host |
 
+## Captured values, reproduced preamble
+
+Two files are a hybrid, and the split has to be stated because the answer in
+them is real and the lines around it are not.
+
+`samba-tool testparm --suppress-prompt` prints only the parameters smb.conf
+sets, so on a host whose smb.conf leaves the role derived — `security = user`,
+which every distribution ships — the role is absent from `testparm.txt`'s shape
+entirely. The read path therefore asks for that one parameter by name, and
+these two files are what it has to parse:
+
+| File | Command it stands for |
+| --- | --- |
+| `testparm-parameter-role-auto.txt` | `samba-tool testparm --suppress-prompt --parameter-name="server role"` against a distribution's own smb.conf |
+| `testparm-parameter-role-dc.txt` | the same command on a provisioned controller |
+
+The **values** — `auto` and `active directory domain controller` — are the two
+answers read on the lab's Fedora 44 guest with samba 4.24.6 and recorded in
+[tui-dc#17](https://github.com/tui-tools/tui-dc/issues/17), the issue these
+files exist for.
+
+The **lines around them** are not that guest's bytes. testparm logs its
+preamble through samba's own logger, and the two `INFO … Loaded …` lines here
+are reproduced in the prefix shape `testparm.txt` captured — same logger
+format, this file's own flattened timestamp and pid. The `WARNING` line in the
+`-dc` file is `testparm.txt`'s own acl_xattr warning, kept here deliberately
+rather than because that run was seen to print it: its text contains the words
+"domain controller", so a parser that returned the last line outright would
+read a warning as a role and make `IsDC()` true on a host that is not one. It
+is in the fixture to hold that shut.
+
+Replacing both with a verbatim capture from a guest is worth doing the next
+time one is up; the values would not change, only the provenance of the
+preamble.
+
 ## Constructed
 
 Three files could **not** be captured. `samba-tool domain provision` panics at

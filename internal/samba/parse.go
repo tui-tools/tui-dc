@@ -2,6 +2,7 @@ package samba
 
 import (
 	"encoding/base64"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -549,6 +550,42 @@ func ParseServerRole(out string) (role, dnsBackend, realm, workgroup string) {
 		}
 	}
 	return role, dnsBackend, realm, workgroup
+}
+
+// sambaLogLine matches a line samba's own logger wrote rather than an answer
+// samba-tool was asked for. The level is the first word —
+//
+//	INFO 2026-08-30 21:26:46,780 pid:62 …/testparm.py #97: Loaded services file OK.
+//
+// — and no parameter value ever starts with one.
+var sambaLogLine = regexp.MustCompile(
+	`^(?:DEBUG|INFO|NOTICE|WARNING|ERROR|CRITICAL)\b`)
+
+// ParseParameterValue reads the one value `samba-tool testparm
+// --parameter-name=<name>` prints.
+//
+// The answer is the last line samba's logger did not write — not the whole
+// output, and not simply the last line. testparm logs "Loaded smb config files
+// from …" and "Loaded services file OK." to stdout ahead of the value, and on
+// samba 4.24 each arrives behind an `INFO <date> pid:<n> <file> #<line>:`
+// prefix, so a read that took the whole output would get the preamble too.
+// Dropping those lines also matters for what they contain: testparm's
+// acl_xattr warning has the words "domain controller" in its text, and a
+// warning mistaken for a role would make directory.Domain.IsDC() true on a
+// host that is not a controller at all.
+//
+// An output with nothing but the logger's own lines in it yields "", which is
+// the same answer as a read that did not run.
+func ParseParameterValue(out string) string {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" || sambaLogLine.MatchString(line) {
+			continue
+		}
+		return line
+	}
+	return ""
 }
 
 // ntToUnixSeconds is the gap between the Windows FILETIME epoch

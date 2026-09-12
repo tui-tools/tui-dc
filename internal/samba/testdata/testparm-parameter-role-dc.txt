@@ -1,0 +1,4 @@
+INFO 2026-09-12 10:16:41,903 pid:1507 /usr/lib/python3/dist-packages/samba/netcmd/testparm.py #96: Loaded smb config files from /etc/samba/smb.conf
+INFO 2026-09-12 10:16:41,903 pid:1507 /usr/lib/python3/dist-packages/samba/netcmd/testparm.py #97: Loaded services file OK.
+WARNING 2026-09-12 10:16:41,903 pid:1507 /usr/lib/python3/dist-packages/samba/netcmd/testparm.py #180: When acting as Active Directory domain controller, acl_xattr should be in vfs objects.
+active directory domain controller

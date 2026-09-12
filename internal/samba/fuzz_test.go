@@ -14,7 +14,7 @@ import (
 // package's testdata — see
 // https://github.com/tui-tools/tui-kit/blob/main/templates/FUZZING.md.
 //
-// This package has five parsers, and every one of them is fed the output of a
+// This package has six parsers, and every one of them is fed the output of a
 // program on a machine that may be mid-upgrade, mid-failure or answering in a
 // locale nobody expected. So there is one target per parser, and each asserts
 // invariants rather than outputs: what a caller is allowed to assume for any
@@ -236,6 +236,31 @@ func FuzzParseServerRole(f *testing.F) {
 		domain := directory.Domain{ServerRole: role}
 		if domain.IsDC() != strings.Contains(strings.ToLower(role), "domain controller") {
 			t.Fatalf("IsDC disagrees with role %q", role)
+		}
+	})
+}
+
+// FuzzParseParameterValue covers the one-parameter testparm read, which exists
+// because a distribution's smb.conf leaves the role derived. It is the loosest
+// read in the package — it takes a whole line, with no key to check it against
+// — so the invariants are what keep it from reading samba's logger as an
+// answer.
+func FuzzParseParameterValue(f *testing.F) {
+	seedFromTestdata(f, "testparm")
+	f.Add("INFO 2026-09-12 10:14:02,118 pid:1 t.py #97: Loaded services file OK.\n")
+	f.Add("WARNING x: When acting as Active Directory domain controller, …\n")
+	f.Fuzz(func(t *testing.T, input string) {
+		value := ParseParameterValue(input)
+		containedIn(t, input, value)
+		if sambaLogLine.MatchString(value) {
+			t.Fatalf("a line samba's logger wrote was returned as a value: %q",
+				value)
+		}
+		// A logger line whose text mentions a domain controller must never be
+		// able to turn this host into one.
+		if (directory.Domain{ServerRole: value}).IsDC() &&
+			!strings.Contains(strings.ToLower(value), "domain controller") {
+			t.Fatalf("IsDC disagrees with value %q", value)
 		}
 	})
 }
