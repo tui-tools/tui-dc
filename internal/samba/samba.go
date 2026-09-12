@@ -199,12 +199,14 @@ func (r *Real) Describe() string {
 	return r.opts.Server
 }
 
-// Preview renders the exact command line Run will execute.
+// Preview renders the exact command line Run will execute, quoted so the
+// reader can paste it — see directory.Previewable for the one argument that
+// needs it.
 func (r *Real) Preview(cmd runner.Command) string {
 	if r.run == nil {
-		return strings.Join(cmd.Argv, " ")
+		return strings.Join(directory.Previewable(cmd).Argv, " ")
 	}
-	return r.run.Preview(cmd)
+	return r.run.Preview(directory.Previewable(cmd))
 }
 
 // Run executes a previewed command, routed to the runner that owns its

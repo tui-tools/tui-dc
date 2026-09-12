@@ -48,6 +48,26 @@ and the read path has to survive them without claiming the domain is empty.
 | `dns-query-refused.txt` | `dns query` when the DNS RPC server refuses the connection |
 | `drs-showrepl-failed.txt` | `drs showrepl` when the DRS connection cannot be made |
 
+### The provision transcript
+
+`domain-provision.txt` is a `samba-tool domain provision` transcript from
+samba 4.24.6 on Fedora 44, which is the shape that matters: on 4.24 samba
+prints its whole closing summary through its own logger, so every fact arrives
+behind an `INFO <date> pid:<n> <file> #<line>:` prefix rather than on a bare
+line. A parser written against the bare shape silently finds none of them, and
+the Administrator password is the one fact a provision prints that exists
+nowhere else afterwards.
+
+Scrubbed, as always, and more carefully here: the generated Administrator
+password is replaced by an obviously fake placeholder, the timestamps and pid
+are flattened, and realm, hostname and domain SID are the documentation ones.
+The bare-line shape older samba prints is covered by a literal in
+`provision_test.go`, so both are held.
+
+| File | Command |
+| --- | --- |
+| `domain-provision.txt` | `samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB --server-role=dc --dns-backend=SAMBA_INTERNAL` |
+
 ## Constructed
 
 Three files could **not** be captured. `samba-tool domain provision` panics at

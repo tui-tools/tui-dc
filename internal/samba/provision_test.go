@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/tui-tools/tui-dc/internal/directory"
@@ -99,6 +100,49 @@ func TestParseProvisionOutput(t *testing.T) {
 	}
 	if len(result.Summary) != 5 {
 		t.Errorf("summary = %+v", result.Summary)
+	}
+}
+
+// TestParseProvisionOutputLoggerPrefixed is the shape samba 4.24 prints: the
+// same facts, each behind the logger's own prefix. Anchoring the parser at the
+// start of the line found none of them, which cost the user the only copy of
+// the Administrator password that will ever exist.
+func TestParseProvisionOutputLoggerPrefixed(t *testing.T) {
+	result := ParseProvisionOutput(read(t, "domain-provision.txt"))
+	if result.AdminPassword != "FAKE-password-not-a-real-one" {
+		t.Errorf("AdminPassword = %q", result.AdminPassword)
+	}
+	if result.Krb5Conf != "/var/lib/samba/private/krb5.conf" {
+		t.Errorf("Krb5Conf = %q", result.Krb5Conf)
+	}
+	if len(result.Summary) != 5 {
+		t.Fatalf("summary = %+v", result.Summary)
+	}
+	// The summary is shown verbatim, so the log prefix must be gone from it
+	// and samba's own alignment kept.
+	if result.Summary[0] != "Server Role:           active directory domain controller" {
+		t.Errorf("summary[0] = %q", result.Summary[0])
+	}
+	for _, line := range result.Summary {
+		if strings.Contains(line, "pid:") {
+			t.Errorf("a log prefix reached the result screen: %q", line)
+		}
+	}
+}
+
+// TestParseProvisionOutputIgnoresPasswordProse guards the cost of searching
+// the whole line: the transcript also announces that a password will be
+// generated, and that sentence is not a password.
+func TestParseProvisionOutputIgnoresPasswordProse(t *testing.T) {
+	for _, line := range []string{
+		"INFO 2026-01-01 10:00:00,100 pid:1234 provision.py #260: " +
+			"Administrator password will be set randomly!",
+		"Admin password:",
+		"Admin password:        two tokens",
+	} {
+		if result := ParseProvisionOutput(line + "\n"); result.AdminPassword != "" {
+			t.Errorf("%q parsed as the password %q", line, result.AdminPassword)
+		}
 	}
 }
 

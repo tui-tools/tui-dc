@@ -1,0 +1,41 @@
+INFO 2026-01-01 10:00:00,100 pid:1234 /usr/lib64/python3.14/site-packages/samba/netcmd/domain/provision.py #260: Administrator password will be set randomly!
+INFO 2026-01-01 10:00:00,104 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2180: Looking up IPv4 addresses
+INFO 2026-01-01 10:00:00,105 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2197: Looking up IPv6 addresses
+WARNING 2026-01-01 10:00:00,106 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2204: No IPv6 address will be assigned
+INFO 2026-01-01 10:00:01,880 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1485: Setting up share.ldb
+INFO 2026-01-01 10:00:01,901 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1492: Setting up secrets.ldb
+INFO 2026-01-01 10:00:01,932 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1497: Setting up the registry
+INFO 2026-01-01 10:00:02,410 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1503: Setting up the privileges database
+INFO 2026-01-01 10:00:02,498 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1509: Setting up idmap db
+INFO 2026-01-01 10:00:02,556 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1520: Setting up SAM db
+INFO 2026-01-01 10:00:03,011 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1036: Setting up sam.ldb partitions and settings
+INFO 2026-01-01 10:00:03,013 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1045: Setting up sam.ldb rootDSE
+INFO 2026-01-01 10:00:03,121 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1612: Pre-loading the Samba 4 and AD schema
+INFO 2026-01-01 10:00:06,744 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1351: Adding DomainDN: DC=lab,DC=example
+INFO 2026-01-01 10:00:07,802 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1386: Adding configuration container
+INFO 2026-01-01 10:00:09,415 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1406: Setting up sam.ldb schema
+INFO 2026-01-01 10:00:22,663 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1418: Setting up sam.ldb configuration data
+INFO 2026-01-01 10:00:24,190 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1437: Setting up display specifiers
+INFO 2026-01-01 10:00:26,905 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1444: Modifying display specifiers and extended rights
+INFO 2026-01-01 10:00:27,077 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1453: Adding users container
+INFO 2026-01-01 10:00:27,120 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1460: Modifying users container
+INFO 2026-01-01 10:00:27,142 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1464: Adding computers container
+INFO 2026-01-01 10:00:27,183 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1471: Modifying computers container
+INFO 2026-01-01 10:00:27,205 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1475: Setting up sam.ldb data
+INFO 2026-01-01 10:00:32,518 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1557: Setting up well known security principals
+INFO 2026-01-01 10:00:33,664 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1570: Setting up sam.ldb users and groups
+INFO 2026-01-01 10:00:36,901 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1580: Setting up self join
+INFO 2026-01-01 10:00:42,330 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1182: Adding DNS accounts
+INFO 2026-01-01 10:00:42,490 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1215: Creating CN=MicrosoftDNS,CN=System,DC=lab,DC=example
+INFO 2026-01-01 10:00:42,631 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1226: Creating DomainDnsZones and ForestDnsZones partitions
+INFO 2026-01-01 10:00:44,047 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1240: Populating DomainDnsZones and ForestDnsZones partitions
+INFO 2026-01-01 10:00:47,512 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1323: Setting up sam.ldb rootDSE marking as synchronized
+INFO 2026-01-01 10:00:47,602 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2412: Fixing provision GUIDs
+INFO 2026-01-01 10:00:50,913 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2430: A Kerberos configuration suitable for Samba AD has been generated at /var/lib/samba/private/krb5.conf
+INFO 2026-01-01 10:00:50,914 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2432: Merge the contents of this file with your system krb5.conf or replace it with this one. Do not create a symlink!
+INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #496: Admin password:        FAKE-password-not-a-real-one
+INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #497: Server Role:           active directory domain controller
+INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #498: Hostname:              dc1
+INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #499: NetBIOS Domain:        LAB
+INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #500: DNS Domain:            lab.example
+INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #501: DOMAIN SID:            S-1-5-21-1111111111-2222222222-3333333333

@@ -52,13 +52,31 @@ type ProvisionResult struct {
 	Summary []string
 }
 
+// provisionSummaryLabels are the facts the result screen repeats, in the order
+// samba-tool prints them.
+var provisionSummaryLabels = []string{"Server Role:", "Hostname:",
+	"NetBIOS Domain:", "DNS Domain:", "DOMAIN SID:"}
+
 // ParseProvisionOutput pulls those out of the provision transcript.
+//
+// Every fact is looked for anywhere in the line, never only at its start:
+// samba prints the whole summary through its own logger, so on 4.24 each of
+// these lines arrives behind an `INFO <date> pid:<n> <file> #<line>:` prefix,
+// and a parser anchored at the start of the line finds none of them — which
+// costs the user the one password that exists nowhere else. Older samba prints
+// the same facts bare, and both shapes are fixtures here.
 func ParseProvisionOutput(out string) ProvisionResult {
 	result := ProvisionResult{}
 	for _, raw := range strings.Split(out, "\n") {
 		line := strings.TrimSpace(raw)
-		if value, ok := strings.CutPrefix(line, "Admin password:"); ok {
-			result.AdminPassword = strings.TrimSpace(value)
+		if value, _, ok := labelled(line, "Admin password:"); ok {
+			// Searching the whole line is loose enough that what follows the
+			// label has to be checked: a password is exactly one token, so
+			// prose that happens to mention one ("Administrator password will
+			// be set randomly!") cannot be mistaken for the password itself.
+			if fields := strings.Fields(value); len(fields) == 1 {
+				result.AdminPassword = fields[0]
+			}
 			continue
 		}
 		if idx := strings.Index(line, "has been generated at"); idx >= 0 &&
@@ -66,14 +84,25 @@ func ParseProvisionOutput(out string) ProvisionResult {
 			result.Krb5Conf = strings.TrimSpace(line[idx+len("has been generated at"):])
 			continue
 		}
-		for _, prefix := range []string{"Server Role:", "Hostname:",
-			"NetBIOS Domain:", "DNS Domain:", "DOMAIN SID:"} {
-			if strings.HasPrefix(line, prefix) {
-				result.Summary = append(result.Summary, line)
+		for _, label := range provisionSummaryLabels {
+			// The fact is kept from the label on, which drops the log prefix
+			// and keeps samba's own column alignment for the screen.
+			if _, fact, ok := labelled(line, label); ok {
+				result.Summary = append(result.Summary, fact)
 			}
 		}
 	}
 	return result
+}
+
+// labelled finds a label anywhere in a line and returns what follows it, plus
+// the line from the label on.
+func labelled(line, label string) (value, fact string, ok bool) {
+	idx := strings.Index(line, label)
+	if idx < 0 {
+		return "", "", false
+	}
+	return strings.TrimSpace(line[idx+len(label):]), strings.TrimSpace(line[idx:]), true
 }
 
 // dcUnitPaths is where the AD DC unit file lives per distribution: Debian and

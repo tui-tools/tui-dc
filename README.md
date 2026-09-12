@@ -63,7 +63,10 @@ wizard:
 1. **Realm** — the domain's DNS name (`lab.example`), validated as one.
 2. **NetBIOS domain** — the short name, prefilled from the realm's first label.
 3. **DNS backend** — `SAMBA_INTERNAL` (default) or `BIND9_DLZ`.
-4. **DNS forwarder** — optional, internal backend only.
+4. **DNS forwarder** — optional, internal backend only. `samba-tool domain
+   provision` has no forwarder flag, so it reaches samba as the smb.conf
+   parameter it is: one `--option=dns forwarder=…` argument, quoted in the
+   preview because its parameter name carries a space.
 5. **Type the realm back** — a provision decides everything after it, so it
    gets a second, deliberate confirmation before the usual command preview.
 

@@ -172,7 +172,9 @@ func (f *Fake) Describe() string {
 }
 
 // Preview renders the command the way the real backend would.
-func (f *Fake) Preview(cmd runner.Command) string { return f.run.Preview(cmd) }
+func (f *Fake) Preview(cmd runner.Command) string {
+	return f.run.Preview(directory.Previewable(cmd))
+}
 
 // Run applies a confirmed command to the in-memory domain.
 func (f *Fake) Run(ctx context.Context, cmd runner.Command) (string, error) {
