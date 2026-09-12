@@ -7,6 +7,11 @@ author's memory, not of Samba, and the difference has to be visible.
 The realm throughout is the documentation one — `lab.example` / `LAB`, hosts
 `dc1`, `ws01`, `ws02`, addresses in `10.10.0.0/24`. Nothing real, ever.
 
+The one exception is `domain-provision.txt`, which is a transcript of a real
+provision and is kept as it was printed: its host is the lab guest's own
+`fedora` and its addresses are the guest's own `10.0.2.x`, which name a
+throwaway VM and nothing else.
+
 ## Captured
 
 Real `samba-tool` output, captured from a throwaway Samba AD DC provisioned in
@@ -50,23 +55,52 @@ and the read path has to survive them without claiming the domain is empty.
 
 ### The provision transcript
 
-`domain-provision.txt` is a `samba-tool domain provision` transcript from
-samba 4.24.6 on Fedora 44, which is the shape that matters: on 4.24 samba
+`domain-provision.txt` is the transcript of a provision that really happened:
+an acceptance run in [tui-lab](https://github.com/tui-tools/tui-lab) on a
+Fedora 44 guest (2 cpu, 4 GB, SELinux enforcing) with samba 4.24.6, captured on
+2026-09-12 with the exact command line the wizard builds:
+
+```sh
+samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB \
+  --server-role=dc --dns-backend=SAMBA_INTERNAL --host-ip=10.0.2.15 \
+  '--option=interfaces=lo enp0s4' '--option=bind interfaces only=yes' \
+  '--option=dns forwarder=10.0.2.3'
+```
+
+It was run outside the tool, on a guest restored to the same pre-provision
+snapshot the acceptance flow starts from, so the file is the tool's own input
+without the tool in the way. Exit status 0.
+
+This is the shape that matters, and the bug the fixture pins: on 4.24 samba
 prints its whole closing summary through its own logger, so every fact arrives
 behind an `INFO <date> pid:<n> <file> #<line>:` prefix rather than on a bare
 line. A parser written against the bare shape silently finds none of them, and
 the Administrator password is the one fact a provision prints that exists
-nowhere else afterwards.
+nowhere else afterwards. Nothing short of a real transcript proves that: the
+prefix, the `pid:`, the interleaved bare `Repacking database …` lines and the
+hundreds of `Applied Forest Update` lines are all samba's, not an author's idea
+of samba's.
 
-Scrubbed, as always, and more carefully here: the generated Administrator
-password is replaced by an obviously fake placeholder, the timestamps and pid
-are flattened, and realm, hostname and domain SID are the documentation ones.
-The bare-line shape older samba prints is covered by a literal in
-`provision_test.go`, so both are held.
+Scrubbed, and only here:
+
+- the generated Administrator password became `FAKE-password-not-a-real-one`,
+  keeping samba's own column alignment so the screen's shape is still tested;
+- the domain SID became `S-1-5-21-1111111111-2222222222-3333333333`;
+- the gkdi/gmsa root key guid became the nil guid — which also caught the
+  guid on the last `Applied Domain Update 89` line, since that line happened to
+  carry the same value the scrub replaced. It is a public AD schema constant,
+  not a secret, and no parser here reads it.
+
+No line was reordered, removed or reflowed, and the timestamps and pid are the
+run's own. The bare-line shape older samba prints is covered by a literal in
+`provision_test.go`, so both are held. A successful provision given `--host-ip`
+prints no `WARNING` line at all — samba has no address to guess and 4.24.6 logs
+its IPv6 lookup at `INFO` — so the warning path is held by the captured refusal
+below and by literals in `preflight_test.go` rather than by this file.
 
 | File | Command |
 | --- | --- |
-| `domain-provision.txt` | `samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB --server-role=dc --dns-backend=SAMBA_INTERNAL` |
+| `domain-provision.txt` | `samba-tool domain provision` as above, on a tui-lab Fedora 44 guest |
 
 ### The two refusals the preflight exists for
 

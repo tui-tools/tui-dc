@@ -1,41 +1,131 @@
-INFO 2026-01-01 10:00:00,100 pid:1234 /usr/lib64/python3.14/site-packages/samba/netcmd/domain/provision.py #260: Administrator password will be set randomly!
-INFO 2026-01-01 10:00:00,104 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2180: Looking up IPv4 addresses
-INFO 2026-01-01 10:00:00,105 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2197: Looking up IPv6 addresses
-WARNING 2026-01-01 10:00:00,106 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2204: No IPv6 address will be assigned
-INFO 2026-01-01 10:00:01,880 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1485: Setting up share.ldb
-INFO 2026-01-01 10:00:01,901 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1492: Setting up secrets.ldb
-INFO 2026-01-01 10:00:01,932 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1497: Setting up the registry
-INFO 2026-01-01 10:00:02,410 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1503: Setting up the privileges database
-INFO 2026-01-01 10:00:02,498 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1509: Setting up idmap db
-INFO 2026-01-01 10:00:02,556 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1520: Setting up SAM db
-INFO 2026-01-01 10:00:03,011 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1036: Setting up sam.ldb partitions and settings
-INFO 2026-01-01 10:00:03,013 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1045: Setting up sam.ldb rootDSE
-INFO 2026-01-01 10:00:03,121 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1612: Pre-loading the Samba 4 and AD schema
-INFO 2026-01-01 10:00:06,744 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1351: Adding DomainDN: DC=lab,DC=example
-INFO 2026-01-01 10:00:07,802 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1386: Adding configuration container
-INFO 2026-01-01 10:00:09,415 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1406: Setting up sam.ldb schema
-INFO 2026-01-01 10:00:22,663 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1418: Setting up sam.ldb configuration data
-INFO 2026-01-01 10:00:24,190 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1437: Setting up display specifiers
-INFO 2026-01-01 10:00:26,905 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1444: Modifying display specifiers and extended rights
-INFO 2026-01-01 10:00:27,077 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1453: Adding users container
-INFO 2026-01-01 10:00:27,120 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1460: Modifying users container
-INFO 2026-01-01 10:00:27,142 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1464: Adding computers container
-INFO 2026-01-01 10:00:27,183 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1471: Modifying computers container
-INFO 2026-01-01 10:00:27,205 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1475: Setting up sam.ldb data
-INFO 2026-01-01 10:00:32,518 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1557: Setting up well known security principals
-INFO 2026-01-01 10:00:33,664 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1570: Setting up sam.ldb users and groups
-INFO 2026-01-01 10:00:36,901 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1580: Setting up self join
-INFO 2026-01-01 10:00:42,330 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1182: Adding DNS accounts
-INFO 2026-01-01 10:00:42,490 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1215: Creating CN=MicrosoftDNS,CN=System,DC=lab,DC=example
-INFO 2026-01-01 10:00:42,631 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1226: Creating DomainDnsZones and ForestDnsZones partitions
-INFO 2026-01-01 10:00:44,047 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1240: Populating DomainDnsZones and ForestDnsZones partitions
-INFO 2026-01-01 10:00:47,512 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1323: Setting up sam.ldb rootDSE marking as synchronized
-INFO 2026-01-01 10:00:47,602 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2412: Fixing provision GUIDs
-INFO 2026-01-01 10:00:50,913 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2430: A Kerberos configuration suitable for Samba AD has been generated at /var/lib/samba/private/krb5.conf
-INFO 2026-01-01 10:00:50,914 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2432: Merge the contents of this file with your system krb5.conf or replace it with this one. Do not create a symlink!
-INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #496: Admin password:        FAKE-password-not-a-real-one
-INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #497: Server Role:           active directory domain controller
-INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #498: Hostname:              dc1
-INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #499: NetBIOS Domain:        LAB
-INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #500: DNS Domain:            lab.example
-INFO 2026-01-01 10:00:50,960 pid:1234 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #501: DOMAIN SID:            S-1-5-21-1111111111-2222222222-3333333333
+INFO 2026-09-12 12:38:42,853 pid:1459 /usr/lib64/python3.14/site-packages/samba/netcmd/domain/provision.py #260: Administrator password will be set randomly!
+INFO 2026-09-12 12:38:42,870 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2134: Looking up IPv6 addresses
+INFO 2026-09-12 12:38:43,166 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2307: Setting up share.ldb
+INFO 2026-09-12 12:38:43,513 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2311: Setting up secrets.ldb
+INFO 2026-09-12 12:38:43,689 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2316: Setting up the registry
+INFO 2026-09-12 12:38:44,778 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2319: Setting up the privileges database
+INFO 2026-09-12 12:38:45,306 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2322: Setting up idmap db
+INFO 2026-09-12 12:38:45,615 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2329: Setting up SAM db
+INFO 2026-09-12 12:38:45,678 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #887: Setting up sam.ldb partitions and settings
+INFO 2026-09-12 12:38:45,679 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #899: Setting up sam.ldb rootDSE
+INFO 2026-09-12 12:38:45,739 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1312: Pre-loading the Samba 4 and AD schema
+Unable to determine the DomainSID, can not enforce uniqueness constraint on local domainSIDs
+
+INFO 2026-09-12 12:38:45,888 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1389: Adding DomainDN: DC=lab,DC=example
+INFO 2026-09-12 12:38:45,958 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1421: Adding configuration container
+INFO 2026-09-12 12:38:46,040 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1436: Setting up sam.ldb schema
+INFO 2026-09-12 12:38:47,716 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1456: Setting up sam.ldb configuration data
+INFO 2026-09-12 12:38:47,833 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1503: Setting up display specifiers
+INFO 2026-09-12 12:38:48,796 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1511: Modifying display specifiers and extended rights
+INFO 2026-09-12 12:38:48,821 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1518: Adding users container
+INFO 2026-09-12 12:38:48,822 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1524: Modifying users container
+INFO 2026-09-12 12:38:48,823 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1527: Adding computers container
+INFO 2026-09-12 12:38:48,824 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1533: Modifying computers container
+INFO 2026-09-12 12:38:48,824 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1537: Setting up sam.ldb data
+INFO 2026-09-12 12:38:48,930 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1568: Setting up well known security principals
+INFO 2026-09-12 12:38:48,952 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1582: Setting up sam.ldb users and groups
+INFO 2026-09-12 12:38:49,008 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #1590: Setting up self join
+Repacking database from v1 to v2 format (first record CN=ms-DS-DnsRootAlias,CN=Schema,CN=Configuration,DC=lab,DC=example)
+Repack: re-packed 10000 records so far
+Repacking database from v1 to v2 format (first record CN=mSMQConfiguration-Display,CN=40C,CN=DisplaySpecifiers,CN=Configuration,DC=lab,DC=example)
+Repacking database from v1 to v2 format (first record CN=231fb90b-c92a-40c9-9379-bacfc313a3e3,CN=Operations,CN=DomainUpdates,CN=System,DC=lab,DC=example)
+INFO 2026-09-12 12:38:51,527 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1197: Adding DNS accounts
+INFO 2026-09-12 12:38:51,818 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1231: Creating CN=MicrosoftDNS,CN=System,DC=lab,DC=example
+INFO 2026-09-12 12:38:51,839 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1244: Creating DomainDnsZones and ForestDnsZones partitions
+INFO 2026-09-12 12:38:51,998 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/sambadns.py #1249: Populating DomainDnsZones and ForestDnsZones partitions
+Repacking database from v1 to v2 format (first record DC=@,DC=lab.example,CN=MicrosoftDNS,DC=DomainDnsZones,DC=lab,DC=example)
+Repacking database from v1 to v2 format (first record DC=_ldap._tcp.dc,DC=_msdcs.lab.example,CN=MicrosoftDNS,DC=ForestDnsZones,DC=lab,DC=example)
+INFO 2026-09-12 12:38:52,726 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2022: Setting up sam.ldb rootDSE marking as synchronized
+INFO 2026-09-12 12:38:52,797 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2027: Fixing provision GUIDs
+INFO 2026-09-12 12:38:54,961 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2419: gkdi/gmsa root key added with guid 00000000-0000-0000-0000-000000000000
+INFO 2026-09-12 12:38:54,962 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2424: The Kerberos KDC configuration for Samba AD is located at /var/lib/samba/private/kdc.conf
+INFO 2026-09-12 12:38:54,963 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2430: A Kerberos configuration suitable for Samba AD has been generated at /var/lib/samba/private/krb5.conf
+INFO 2026-09-12 12:38:54,963 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #2432: Merge the contents of this file with your system krb5.conf or replace it with this one. Do not create a symlink!
+INFO 2026-09-12 12:38:55,423 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #492: Once the above files are installed, your Samba AD server will be ready to use
+INFO 2026-09-12 12:38:55,423 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #496: Admin password:        FAKE-password-not-a-real-one
+INFO 2026-09-12 12:38:55,423 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #497: Server Role:           active directory domain controller
+INFO 2026-09-12 12:38:55,423 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #498: Hostname:              fedora
+INFO 2026-09-12 12:38:55,423 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #499: NetBIOS Domain:        LAB
+INFO 2026-09-12 12:38:55,423 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #500: DNS Domain:            lab.example
+INFO 2026-09-12 12:38:55,423 pid:1459 /usr/lib64/python3.14/site-packages/samba/provision/__init__.py #501: DOMAIN SID:            S-1-5-21-1111111111-2222222222-3333333333
+Temporarily overriding 'dsdb:schema update allowed' setting
+Applied Forest Update 11: 27a03717-5963-48fc-ba6f-69faa33e70ed
+Applied Forest Update 54: 134428a8-0043-48a6-bcda-63310d9ec4dd
+Applied Forest Update 79: 21ae657c-6649-43c4-bbb3-7f184fdf58c1
+Applied Forest Update 80: dca8f425-baae-47cd-b424-e3f6c76ed08b
+Applied Forest Update 81: a662b036-dbbe-4166-b4ba-21abea17f9cc
+Applied Forest Update 82: 9d17b863-18c3-497d-9bde-45ddb95fcb65
+Applied Forest Update 83: 11c39bed-4bee-45f5-b195-8da0e05b573a
+Applied Forest Update 84: 4664e973-cb20-4def-b3d5-559d6fe123e0
+Applied Forest Update 85: 2972d92d-a07a-44ac-9cb0-bf243356f345
+Applied Forest Update 86: 09a49cb3-6c54-4b83-ab20-8370838ba149
+Applied Forest Update 87: 77283e65-ce02-4dc3-8c1e-bf99b22527c2
+Applied Forest Update 88: 0afb7f53-96bd-404b-a659-89e65c269420
+Applied Forest Update 89: c7f717ef-fdbe-4b4b-8dfc-fa8b839fbcfa
+Applied Forest Update 90: 00232167-f3a4-43c6-b503-9acb7a81b01c
+Applied Forest Update 91: 73a9515b-511c-44d2-822b-444a33d3bd33
+Applied Forest Update 92: e0c60003-2ed7-4fd3-8659-7655a7e79397
+Applied Forest Update 93: ed0c8cca-80ab-4b6b-ac5a-59b1d317e11f
+Applied Forest Update 94: b6a6c19a-afc9-476b-8994-61f5b14b3f05
+Applied Forest Update 95: defc28cd-6cb6-4479-8bcb-aabfb41e9713
+Applied Forest Update 96: d6bd96d4-e66b-4a38-9c6b-e976ff58c56d
+Applied Forest Update 97: bb8efc40-3090-4fa2-8a3f-7cd1d380e695
+Applied Forest Update 98: 2d6abe1b-4326-489e-920c-76d5337d2dc5
+Applied Forest Update 99: 6b13dfb5-cecc-4fb8-b28d-0505cea24175
+Applied Forest Update 100: 92e73422-c68b-46c9-b0d5-b55f9c741410
+Applied Forest Update 101: c0ad80b4-8e84-4cc4-9163-2f84649bcc42
+Applied Forest Update 102: 992fe1d0-6591-4f24-a163-c820fcb7f308
+Applied Forest Update 103: ede85f96-7061-47bf-b11b-0c0d999595b5
+Applied Forest Update 104: ee0f3271-eb51-414a-bdac-8f9ba6397a39
+Applied Forest Update 105: 587d52e0-507e-440e-9d67-e6129f33bb68
+Applied Forest Update 106: ce24f0f6-237e-43d6-ac04-1e918ab04aac
+Applied Forest Update 107: 7f77d431-dd6a-434f-ae4d-ce82928e498f
+Applied Forest Update 108: ba14e1f6-7cd1-4739-804f-57d0ea74edf4
+Applied Forest Update 109: 156ffa2a-e07c-46fb-a5c4-fbd84a4e5cce
+Applied Forest Update 110: 7771d7dd-2231-4470-aa74-84a6f56fc3b6
+Applied Forest Update 111: 49b2ae86-839a-4ea0-81fe-9171c1b98e83
+Applied Forest Update 112: 1b1de989-57ec-4e96-b933-8279a8119da4
+Applied Forest Update 113: 281c63f0-2c9a-4cce-9256-a238c23c0db9
+Applied Forest Update 114: 4c47881a-f15a-4f6c-9f49-2742f7a11f4b
+Applied Forest Update 115: 2aea2dc6-d1d3-4f0c-9994-66c1da21de0f
+Applied Forest Update 116: ae78240c-43b9-499e-ae65-2b6e0f0e202a
+Applied Forest Update 117: 261b5bba-3438-4d5c-a3e9-7b871e5f57f0
+Applied Forest Update 118: 3fb79c05-8ea1-438c-8c7a-81f213aa61c2
+Applied Forest Update 119: 0b2be39a-d463-4c23-8290-32186759d3b1
+Applied Forest Update 120: f0842b44-bc03-46a1-a860-006e8527fccd
+Applied Forest Update 121: 93efec15-4dd9-4850-bc86-a1f2c8e2ebb9
+Applied Forest Update 122: 9e108d96-672f-40f0-b6bd-69ee1f0b7ac4
+Applied Forest Update 123: 1e269508-f862-4c4a-b01f-420d26c4ff8c
+Applied Forest Update 125: e1ab17ed-5efb-4691-ad2d-0424592c5755
+Applied Forest Update 126: 0e848bd4-7c70-48f2-b8fc-00fbaa82e360
+Applied Forest Update 127: 016f23f7-077d-41fa-a356-de7cfdb01797
+Applied Forest Update 128: 49c140db-2de3-44c2-a99a-bab2e6d2ba81
+Applied Forest Update 129: e0b11c80-62c5-47f7-ad0d-3734a71b8312
+Applied Forest Update 130: 2ada1a2d-b02f-4731-b4fe-59f955e24f71
+Applied Forest Update 131: b83818c1-01a6-4f39-91b7-a3bb581c3ae3
+Applied Forest Update 132: bbbb9db0-4009-4368-8c40-6674e980d3c3
+Applied Forest Update 133: f754861c-3692-4a7b-b2c2-d0fa28ed0b0b
+Applied Forest Update 134: d32f499f-3026-4af0-a5bd-13fe5a331bd2
+Applied Forest Update 135: 38618886-98ee-4e42-8cf1-d9a2cd9edf8b
+Applied Forest Update 136: 328092fb-16e7-4453-9ab8-7592db56e9c4
+Applied Forest Update 137: 3a1c887f-df0a-489f-b3f2-2d0409095f6e
+Applied Forest Update 138: 232e831f-f988-4444-8e3e-8a352e2fd411
+Applied Forest Update 139: ddddcf0c-bec9-4a5a-ae86-3cfe6cc6e110
+Applied Forest Update 140: a0a45aac-5550-42df-bb6a-3cc5c46b52f2
+Applied Forest Update 141: 3e7645f3-3ea5-4567-b35a-87630449c70c
+Applied Forest Update 142: e634067b-e2c4-4d79-b6e8-73c619324d5e
+Skip Domain Update 75: 5e1574f6-55df-493e-a671-aaeffca6a100
+Skip Domain Update 76: d262aae8-41f7-48ed-9f35-56bbb677573d
+Skip Domain Update 77: 82112ba0-7e4c-4a44-89d9-d46c9612bf91
+Applied Domain Update 78: c3c927a6-cc1d-47c0-966b-be8f9b63d991
+Applied Domain Update 79: 54afcfb9-637a-4251-9f47-4d50e7021211
+Applied Domain Update 80: f4728883-84dd-483c-9897-274f2ebcf11e
+Applied Domain Update 81: ff4f9d27-7157-4cb0-80a9-5d6f2b14c8ff
+Applied Domain Update 82: 83c53da7-427e-47a4-a07a-a324598b88f7
+Applied Domain Update 83: c81fc9cc-0130-4fd1-b272-634d74818133
+Applied Domain Update 84: e5f9e791-d96d-4fc9-93c9-d53e1dc439ba
+Applied Domain Update 85: e6d5fd00-385d-4e65-b02d-9da3493ed850
+Applied Domain Update 86: 3a6b3fbf-3168-4312-a10d-dd5b3393952d
+Applied Domain Update 87: 7f950403-0ab3-47f9-9730-5d7b0269f9bd
+Applied Domain Update 88: 434bb40d-dbc9-4fe7-81d4-d57229f7b080
+Applied Domain Update 89: 00000000-0000-0000-0000-000000000000
