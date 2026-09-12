@@ -2,6 +2,7 @@ package samba
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -82,4 +83,127 @@ func wasRun(ran [][]string, want []string) bool {
 		}
 	}
 	return false
+}
+
+// distroSMBConfTestparm is what `samba-tool testparm --suppress-prompt` prints
+// on a host running a distribution's own /etc/samba/smb.conf: the parameters
+// the file sets, and not the role, which the file leaves derived. Read on the
+// lab's Fedora 44 guest against the packaged file (tui-dc#17).
+const distroSMBConfTestparm = "\tsecurity = USER\n\tworkgroup = SAMBA\n"
+
+// roleReadArgv is the read that answers the role when smb.conf only implies it.
+var roleReadArgv = []string{"testparm", "--suppress-prompt",
+	"--parameter-name=server role"}
+
+// TestLoadDomainRoleFromParameterRead is the unprovisioned host: samba-tool is
+// installed, smb.conf is the distribution's, and the role is nowhere in the
+// output the read path parses. It has to come from the one-parameter read, as
+// `auto` — the word provision itself refuses on, and the word the preflight
+// has to be able to print.
+func TestLoadDomainRoleFromParameterRead(t *testing.T) {
+	var ran [][]string
+	readHost := func(_ context.Context, args ...string) (string, error) {
+		ran = append(ran, append([]string(nil), args...))
+		switch {
+		case args[0] == "--version":
+			return "4.24.6\n", nil
+		case wasRun([][]string{args}, roleReadArgv):
+			return read(t, "testparm-parameter-role-auto.txt"), nil
+		case args[0] == "testparm":
+			return distroSMBConfTestparm, nil
+		}
+		return "", errors.New("ERROR: Unable to open the sam database")
+	}
+
+	model, _ := loadDomain(context.Background(), readHost, DefaultServer)
+	if !wasRun(ran, roleReadArgv) {
+		t.Fatalf("the role was never asked for by name\nit ran: %q", ran)
+	}
+	if model.Domain.ServerRole != "auto" {
+		t.Errorf("role = %q, want auto", model.Domain.ServerRole)
+	}
+	// The whole point of the value is the sentence the preflight builds from
+	// it, and the whole danger of it is IsDC: `auto` is not a controller, and a
+	// host where it said otherwise would be offered no provision at all.
+	if model.Domain.IsDC() {
+		t.Error("a host whose role is auto was taken for a domain controller")
+	}
+	if !model.Installed {
+		t.Error("samba-tool answered --version and the model says it is absent")
+	}
+}
+
+// TestLoadDomainRoleNotReadTwice is the provisioned controller, where the role
+// is in its own smb.conf and the first read already has it. The second read
+// must not happen: one more samba-tool process per load, for a fact already
+// held, is the cost this fallback exists to avoid paying everywhere.
+func TestLoadDomainRoleNotReadTwice(t *testing.T) {
+	fake := NewFake()
+	var ran [][]string
+	record := func(ctx context.Context, args ...string) (string, error) {
+		ran = append(ran, append([]string(nil), args...))
+		return fake.read(ctx, args...)
+	}
+
+	model, _ := loadDomain(context.Background(), record, DefaultServer)
+	if model.Domain.ServerRole != "active directory domain controller" {
+		t.Errorf("role = %q", model.Domain.ServerRole)
+	}
+	if wasRun(ran, roleReadArgv) {
+		t.Error("the role was read a second time on a host that already said it")
+	}
+}
+
+// TestLoadDomainRoleReadFails is a host where the one-parameter read cannot
+// run — an older samba-tool that does not take the option, a build that dies
+// on an import. The load keeps going and the role stays empty, which is what
+// the tool did before the read existed; the preflight's fallback wording
+// covers it.
+func TestLoadDomainRoleReadFails(t *testing.T) {
+	readHost := func(_ context.Context, args ...string) (string, error) {
+		switch {
+		case args[0] == "--version":
+			return "4.24.6\n", nil
+		case wasRun([][]string{args}, roleReadArgv):
+			return "", errors.New("Usage: samba-tool testparm [options]")
+		case args[0] == "testparm":
+			return distroSMBConfTestparm, nil
+		}
+		return "", errors.New("ERROR: Unable to open the sam database")
+	}
+
+	model, _ := loadDomain(context.Background(), readHost, DefaultServer)
+	if model.Domain.ServerRole != "" {
+		t.Errorf("role = %q, want it to stay empty", model.Domain.ServerRole)
+	}
+	if model.Domain.IsDC() {
+		t.Error("a failed read made a host into a domain controller")
+	}
+	if !model.Installed || model.Domain.NetBIOS != "SAMBA" {
+		t.Errorf("the rest of the load did not survive: %+v", model.Domain)
+	}
+	// The failure is silent on purpose: it refines a fact the screen already
+	// shows without it, so there is nothing to tell the user about it.
+	for _, note := range model.Notes {
+		if strings.Contains(note, "parameter-name") {
+			t.Errorf("the failed read left a note: %q", note)
+		}
+	}
+}
+
+// TestFakeAnswersParameterRead keeps the fake backend honest about the read the
+// real one makes: --demo has to answer it the way samba does, preamble and all.
+func TestFakeAnswersParameterRead(t *testing.T) {
+	fresh := NewFakeFresh()
+	out, err := fresh.read(context.Background(), roleReadArgv...)
+	if err != nil {
+		t.Fatalf("the fake refused the read: %v", err)
+	}
+	if got := ParseParameterValue(out); got != "standalone server" {
+		t.Errorf("role = %q, want standalone server", got)
+	}
+	if !strings.Contains(out, "Loaded services file OK.") {
+		t.Error("the fake skipped samba's logger preamble, which the parser " +
+			"exists to skip")
+	}
 }

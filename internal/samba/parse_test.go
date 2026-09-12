@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tui-tools/tui-dc/internal/directory"
 )
 
 // read loads a fixture. Every one of them is either real samba-tool output
@@ -342,5 +344,46 @@ func TestParseLDIFContinuation(t *testing.T) {
 	}
 	if got := entry.First("broken"); got != "not base64 at all" {
 		t.Errorf("undecodable base64 should be kept as printed, got %q", got)
+	}
+}
+
+func TestParseParameterValueDefaultConfig(t *testing.T) {
+	// A distribution's own smb.conf: the role is not in the file, and the one
+	// parameter read resolves it to `auto` — the value provision refuses on and
+	// the value the preflight has to be able to name.
+	got := ParseParameterValue(read(t, "testparm-parameter-role-auto.txt"))
+	if got != "auto" {
+		t.Errorf("role = %q, want auto", got)
+	}
+}
+
+func TestParseParameterValueProvisionedController(t *testing.T) {
+	got := ParseParameterValue(read(t, "testparm-parameter-role-dc.txt"))
+	if got != "active directory domain controller" {
+		t.Errorf("role = %q", got)
+	}
+	if !(directory.Domain{ServerRole: got}).IsDC() {
+		t.Error("a controller's own role did not read as a controller")
+	}
+}
+
+func TestParseParameterValueSkipsTheLogger(t *testing.T) {
+	// The dangerous line is samba's acl_xattr warning: it has the words
+	// "domain controller" in its text, so a read that took the last line
+	// outright would make IsDC() true on a host with no domain at all. With no
+	// value behind it the answer is nothing, which is what a read that never
+	// ran also gives.
+	var preamble []string
+	for _, line := range strings.Split(read(t, "testparm-parameter-role-dc.txt"), "\n") {
+		if !strings.HasPrefix(line, "active directory") {
+			preamble = append(preamble, line)
+		}
+	}
+	got := ParseParameterValue(strings.Join(preamble, "\n"))
+	if got != "" {
+		t.Fatalf("value = %q, want nothing", got)
+	}
+	if (directory.Domain{ServerRole: got}).IsDC() {
+		t.Error("an empty answer became a domain controller")
 	}
 }

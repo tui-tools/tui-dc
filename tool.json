@@ -94,7 +94,7 @@
         "samba-tool",
         "--version"
       ],
-      "versionRegex": "([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)",
+      "versionRegex": "(?m)^([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)\\S*\\s*$",
       "minimum": "4.13",
       "searchPaths": [
         "/usr/bin/samba-tool",
