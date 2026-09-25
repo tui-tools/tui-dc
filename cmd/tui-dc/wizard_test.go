@@ -206,7 +206,7 @@ func TestProvisionWizardEndToEnd(t *testing.T) {
 
 	press(t, a, "y")
 	ran := fake.Commands()
-	if len(ran) != cleared+1 || ran[cleared].String() != wantArgv {
+	if len(ran) != cleared+1 || strings.Join(ran[cleared].Argv, " ") != wantArgv {
 		t.Fatalf("ran %+v, want exactly the previewed command", ran)
 	}
 	// Nothing but quoting separates the two: the preview renders the argv that

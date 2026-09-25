@@ -238,14 +238,15 @@ func (r *Real) Describe() string {
 	return r.opts.Server
 }
 
-// Preview renders the exact command line Run will execute, quoted so the
-// reader can paste it — see directory.Previewable for the one argument that
-// needs it.
+// Preview renders the exact command line Run will execute. The kit quotes
+// every argument a shell would not read as one word (runner.Join), so
+// `--option=dns forwarder=10.0.0.1` previews as the single argument it is and
+// the line can be pasted into a shell as the same argv.
 func (r *Real) Preview(cmd runner.Command) string {
 	if r.run == nil {
-		return strings.Join(directory.Previewable(cmd).Argv, " ")
+		return runner.Join(cmd.Argv)
 	}
-	return r.run.Preview(directory.Previewable(cmd))
+	return r.run.Preview(cmd)
 }
 
 // Run executes a previewed command, routed to the runner that owns its

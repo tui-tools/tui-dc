@@ -231,11 +231,11 @@ func TestParseRecordSpec(t *testing.T) {
 	}
 }
 
-// TestPreviewable spells out what quoting a preview does and does not do: the
-// argv is untouched, ordinary arguments are left bare, and the ones a shell
-// would read as more than one word are quoted so the previewed line is the
-// command that runs.
-func TestPreviewable(t *testing.T) {
+// TestPreviewQuoting spells out what the kit's preview quoting (runner.Join)
+// does for this tool's commands: the argv is untouched, ordinary arguments are
+// left bare, and the ones a shell would read as more than one word are quoted
+// so the previewed line is the command that runs.
+func TestPreviewQuoting(t *testing.T) {
 	cmd, err := BuildProvisionCommand(Provision{
 		Realm: "lab.example", NetBIOS: "LAB",
 		DNSBackend: DNSBackendInternal, Forwarder: "10.0.0.1",
@@ -246,29 +246,27 @@ func TestPreviewable(t *testing.T) {
 	want := "samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB " +
 		"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
 		"'--option=dns forwarder=10.0.0.1'"
-	if got := Previewable(cmd).String(); got != want {
+	if got := cmd.String(); got != want {
 		t.Errorf("preview = %q\n want %q", got, want)
 	}
-	// The command itself is not rewritten: a quote must never reach an
-	// argument samba-tool parses.
-	if !strings.HasSuffix(cmd.String(), "--option=dns forwarder=10.0.0.1") {
-		t.Errorf("Previewable rewrote the argv it was given: %q", cmd.String())
+	// The argv itself carries no quote: none may reach an argument
+	// samba-tool parses.
+	if last := cmd.Argv[len(cmd.Argv)-1]; last != "--option=dns forwarder=10.0.0.1" {
+		t.Errorf("the argv was rewritten: %q", last)
 	}
 	for _, arg := range []string{"samba-tool", "--realm=LAB.EXAMPLE",
 		"Administrator", "10.10.0.23", "CN=Users,DC=lab,DC=example"} {
-		if got := Previewable(runner.Command{Argv: []string{arg}}).String(); got != arg {
+		if got := runner.Join([]string{arg}); got != arg {
 			t.Errorf("%q was quoted as %q, and needs no quoting", arg, got)
 		}
 	}
 	// A group name with a space is the other argument this applies to, and an
 	// embedded quote must survive it.
-	got := Previewable(runner.Command{
-		Argv: []string{"samba-tool", "group", "listmembers", "Domain Admins"},
-	}).String()
+	got := runner.Join([]string{"samba-tool", "group", "listmembers", "Domain Admins"})
 	if got != "samba-tool group listmembers 'Domain Admins'" {
 		t.Errorf("preview = %q", got)
 	}
-	if got := Previewable(runner.Command{Argv: []string{"it's"}}).String(); got != `'it'\''s'` {
+	if got := runner.Join([]string{"it's"}); got != `'it'"'"'s'` {
 		t.Errorf("an embedded quote previewed as %q", got)
 	}
 }
