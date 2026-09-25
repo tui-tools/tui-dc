@@ -24,7 +24,7 @@ func TestBuildProvisionCommandArgv(t *testing.T) {
 				DNSBackend: DNSBackendInternal, Forwarder: "10.0.0.1"},
 			"samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB " +
 				"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
-				"--option=dns forwarder=10.0.0.1"},
+				"'--option=dns forwarder=10.0.0.1'"},
 		{"internal dns without a forwarder",
 			Provision{Realm: "corp.internal", NetBIOS: "CORP",
 				DNSBackend: DNSBackendInternal},
@@ -44,9 +44,9 @@ func TestBuildProvisionCommandArgv(t *testing.T) {
 				HostIP: "192.168.10.20", Iface: "eth0"},
 			"samba-tool domain provision --realm=LAB.EXAMPLE --domain=LAB " +
 				"--server-role=dc --dns-backend=SAMBA_INTERNAL " +
-				"--host-ip=192.168.10.20 --option=interfaces=lo eth0 " +
-				"--option=bind interfaces only=yes " +
-				"--option=dns forwarder=192.168.10.1"},
+				"--host-ip=192.168.10.20 '--option=interfaces=lo eth0' " +
+				"'--option=bind interfaces only=yes' " +
+				"'--option=dns forwarder=192.168.10.1'"},
 		// A host with exactly one address still gets --host-ip: the question is
 		// skipped, the answer is not.
 		{"an address with no interface to bind",
