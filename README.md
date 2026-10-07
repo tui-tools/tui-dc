@@ -235,6 +235,26 @@ It is also not a file server tool. The Samba on a domain controller also serves
 `sysvol` and `netlogon`, but shares, sessions and the password database are
 [tui-samba](https://github.com/tui-tools/tui-samba), and the two do not overlap.
 
+## When another project fits better
+
+tui-dc administers a domain from a terminal, one previewed `samba-tool` command
+at a time. Another project may fit better when you want:
+
+- a web console, for administrators who would rather manage the domain from a
+  browser;
+- an OpenID Connect provider and a SAML 2.0 identity provider backed by the
+  domain accounts;
+- Google Workspace sync, or a one-time import of the users and groups of an
+  existing Google Workspace;
+- a self-service portal where people in the domain manage their own account.
+
+That is [Samba Conductor](https://openbasalt.org/projects/samba-conductor/), a
+web console, self-service portal and single sign-on for a Samba Active
+Directory domain, from the OpenBasalt project. It is a pre-release at the time
+of writing.
+
+Samba Conductor comes from the same author as tui-tools.
+
 ## The six screens
 
 | Screen | What it reads | What it can change |
