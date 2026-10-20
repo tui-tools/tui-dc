@@ -53,11 +53,11 @@ type wizardState struct {
 var readHostAddresses = directory.HostAddresses
 
 // provisionOffered reports whether this machine is one the wizard is for: a
-// samba-tool with no domain behind it. A broken controller (role says DC,
+// samba-tool that runs, with no domain behind it. A broken controller (role says DC,
 // nothing answers) is deliberately not offered a provision — that machine
 // needs repair, not a second domain.
 func (a *app) provisionOffered() bool {
-	return a.model.Installed && !a.loadFailed && !a.model.Domain.IsDC()
+	return a.model.Runs() && !a.loadFailed && !a.model.Domain.IsDC()
 }
 
 // startWizard runs the preflight and, when nothing is in the way, opens the

@@ -199,6 +199,13 @@ type Model struct {
 	// perfectly normal machine, and Detail says so.
 	Installed bool   `json:"installed"`
 	Detail    string `json:"detail,omitempty"`
+	// CannotRun is set when samba-tool is on this machine but did not run:
+	// `samba-tool --version` failed for a reason other than the binary being
+	// absent (a Python module missing, a broken install, an escalation that
+	// was refused). It holds the one line that says why. Such a machine is
+	// neither "not installed" nor usable, and saying the first would send the
+	// reader to install a package that is already there.
+	CannotRun string `json:"cannotRun,omitempty"`
 	// Version is what `samba-tool --version` printed.
 	Version string `json:"version,omitempty"`
 	// Reachable reports that a domain controller answered `domain info`.
@@ -216,6 +223,27 @@ type Model struct {
 	// are collected rather than fatal: a machine where `drs showrepl` is
 	// refused still has users worth showing.
 	Notes []string `json:"notes,omitempty"`
+}
+
+// Runs reports that samba-tool is here and answered, which is what every read
+// and every action needs. Installed alone is not enough: a samba-tool that is
+// installed and cannot run reads nothing.
+func (m Model) Runs() bool { return m.Installed && m.CannotRun == "" }
+
+// SambaToolState words what this machine's samba-tool is, for a machine where
+// it is absent or cannot run, and "installed" otherwise. Every surface that
+// says it (the empty screen, the domain screen's fact row, the status line,
+// --report) builds its sentence from this one phrase, so the same screen can
+// no longer state the same fact two ways.
+func SambaToolState(installed bool, cannotRun string) string {
+	switch {
+	case !installed:
+		return "not installed"
+	case cannotRun != "":
+		return "installed but cannot run: " + cannotRun
+	default:
+		return "installed"
+	}
 }
 
 // Counts is the summary the header and --check both want.

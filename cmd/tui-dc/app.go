@@ -255,7 +255,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.groupMembers = map[string][]string{}
 		a.detailTried = map[string]bool{}
 		a.applyFilter()
-		if !a.model.Installed && a.model.Detail != "" {
+		if !a.model.Runs() && a.model.Detail != "" {
 			a.setStatus(ui.StatusWarn, a.model.Detail)
 		}
 		return a, a.fillVisibleDetail()
