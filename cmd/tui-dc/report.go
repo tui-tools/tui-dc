@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/tui-tools/tui-dc/internal/directory"
 	"github.com/tui-tools/tui-dc/internal/samba"
 	"github.com/tui-tools/tui-kit/config"
 	"github.com/tui-tools/tui-kit/report"
@@ -36,7 +37,7 @@ func runReport(cfg config.Config, opts options, out io.Writer) error {
 	// The same probe the header uses. There is one version probe in a tool and
 	// this is it — a report that probed separately could disagree with the
 	// header the user is looking at.
-	backendCompat := probeCompat(context.Background(), opts.demo)
+	backendCompat, probeErr := probeBackend(context.Background(), opts.demo)
 
 	var backendError string
 	if _, err := pickBackend(cfg, opts, backendCompat); err != nil {
@@ -55,7 +56,7 @@ func runReport(cfg config.Config, opts options, out io.Writer) error {
 	}
 
 	info.Extra = append(info.Extra, report.Field{
-		Key: "samba-tool", Value: sambaToolLine(backendCompat.Version),
+		Key: "samba-tool", Value: sambaToolLine(backendCompat.Version, probeErr),
 	})
 	info.Extra = append(info.Extra, report.Field{
 		Key: "this host", Value: hostRole(),
@@ -84,17 +85,26 @@ func runReport(cfg config.Config, opts options, out io.Writer) error {
 	return err
 }
 
-// sambaToolLine says whether samba-tool is on this machine, which is a
-// different fact from what version it is: a probe that found nothing and a
-// probe that could not parse the output both leave the version empty.
-func sambaToolLine(version string) string {
-	if !samba.Available() {
-		return "not installed"
+// sambaAvailable is samba.Available, held in a variable so a test can decide
+// what the machine has instead of inheriting whatever ran it.
+var sambaAvailable = samba.Available
+
+// sambaToolLine says whether samba-tool is on this machine and runs, which is
+// a different fact from what version it is: a probe that found nothing, a
+// probe whose samba-tool failed and a probe that could not parse the output
+// all leave the version empty. A samba-tool that failed is worded exactly as
+// the TUI words it (directory.SambaToolState), with the reason it gave.
+func sambaToolLine(version string, probeErr error) string {
+	if !sambaAvailable() {
+		return directory.SambaToolState(false, "")
 	}
-	if version == "" {
-		return "installed, version unknown"
+	if version != "" {
+		return "installed"
 	}
-	return "installed"
+	if reason := samba.CannotRun(probeErr); reason != "" {
+		return scrubHome(directory.SambaToolState(true, reason))
+	}
+	return "installed, version unknown"
 }
 
 // smbConfPaths are where a Samba configuration lives. The list is short and

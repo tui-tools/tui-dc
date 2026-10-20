@@ -43,8 +43,11 @@ type checkReport struct {
 	Describe string `json:"describe"`
 
 	// Installed is the first question, and a false one is a normal machine
-	// rather than a failure: Detail says why.
+	// rather than a failure: Detail says why. CannotRun is the second: a
+	// samba-tool that is installed and did not run, with the line that says
+	// why.
 	Installed bool   `json:"installed"`
+	CannotRun string `json:"cannotRun,omitempty"`
 	Detail    string `json:"detail,omitempty"`
 	// SambaVersion is what samba-tool printed about itself.
 	SambaVersion string `json:"sambaVersion,omitempty"`
@@ -128,6 +131,7 @@ func runCheck(backend directory.Backend, backendCompat compat.Result,
 		Backend:            backend.Name(),
 		Describe:           backend.Describe(),
 		Installed:          model.Installed,
+		CannotRun:          model.CannotRun,
 		Detail:             model.Detail,
 		SambaVersion:       model.Version,
 		Reachable:          model.Reachable,

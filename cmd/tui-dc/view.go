@@ -78,6 +78,10 @@ func (a *app) emptyMessage() string {
 	if !a.model.Installed {
 		return "samba-tool is not installed here"
 	}
+	if a.model.CannotRun != "" {
+		return "samba-tool is " +
+			directory.SambaToolState(true, a.model.CannotRun)
+	}
 	if a.filter != "" {
 		return "nothing matches " + strconv.Quote(a.filter)
 	}
@@ -135,10 +139,12 @@ func (a *app) subtitle() string {
 		parts = append(parts, a.model.Domain.Realm)
 	case !a.model.Installed:
 		parts = append(parts, "no samba-tool")
+	case a.model.CannotRun != "":
+		parts = append(parts, "samba-tool cannot run")
 	default:
 		parts = append(parts, "domain unknown")
 	}
-	if !a.model.Reachable && a.model.Installed {
+	if !a.model.Reachable && a.model.Runs() {
 		parts = append(parts, "no controller answered")
 	} else if a.model.Domain.DCNetBIOS != "" {
 		parts = append(parts, a.model.Domain.DCNetBIOS)
@@ -265,8 +271,8 @@ func (a *app) domainFacts() []factRow {
 			note: d.LowestLevel == ""},
 		factRow{label: "DNS backend", value: firstNonEmpty(d.DNSBackend, "unknown"),
 			note: d.DNSBackend == ""},
-		factRow{label: "samba-tool", value: firstNonEmpty(a.model.Version, "not installed"),
-			note: !a.model.Installed},
+		factRow{label: "samba-tool", value: sambaToolFact(a.model),
+			note: !a.model.Runs()},
 	)
 
 	// The password policy is part of the domain screen because it is a fact
@@ -755,4 +761,13 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// sambaToolFact is the domain screen's samba-tool row: the version it printed
+// when it ran, and otherwise the same phrase the empty screen and --report use.
+func sambaToolFact(model directory.Model) string {
+	if model.Runs() {
+		return firstNonEmpty(model.Version, "installed, version unknown")
+	}
+	return directory.SambaToolState(model.Installed, model.CannotRun)
 }

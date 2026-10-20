@@ -59,8 +59,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tui-tools/tui-dc/internal/directory"
 	"github.com/tui-tools/tui-kit/compat"
@@ -141,6 +143,47 @@ type Real struct {
 
 // Available reports whether this machine has a samba-tool to drive.
 func Available() bool { return runner.Available(directory.Bin, searchPaths...) }
+
+// maxCannotRun caps the reason CannotRun returns, in runes. It ends up in a
+// header fact, an empty screen and a --report line, so it has to stay short.
+const maxCannotRun = 120
+
+// failedPrefix is how the runner opens a failure: the previewed command line,
+// then "failed:". The command line is noise in a sentence that already names
+// samba-tool, and with escalation it names the sudo prefix as well.
+var failedPrefix = regexp.MustCompile("^`[^`]*` failed: ")
+
+// uncaughtRe is how samba-tool reports an exception it did not handle:
+// `ERROR(<class 'ModuleNotFoundError'>): uncaught exception - No module named
+// 'cryptography'`. The class and the message are the information; the rest
+// is wrapping that pushes the message off a status line, so it is condensed to
+// the shape Python itself prints (`ModuleNotFoundError: No module named ...`).
+var uncaughtRe = regexp.MustCompile(`^ERROR\(<class '([^']+)'>\): uncaught exception - (.+)$`)
+
+// CannotRun says why a samba-tool that is on this machine did not run, from
+// the error the attempt returned. It is empty when there was no error and when
+// the error is the runner's "not found" (ErrNotAvailable): that is a machine
+// without samba-tool, a different fact with a different fix.
+//
+// The reason is one line, cleaned of terminal control and capped: the line of
+// the output that reads like an error, which for samba-tool failing at import
+// is its first one, the exception (see uncaughtRe), and for a bare Python
+// traceback the exception rather than the "Traceback" banner it starts with.
+func CannotRun(err error) string {
+	if err == nil || errors.Is(err, runner.ErrNotAvailable) {
+		return ""
+	}
+	reason := failedPrefix.ReplaceAllString(runner.StatusLine(err.Error()), "")
+	reason = uncaughtRe.ReplaceAllString(strings.TrimSpace(reason), "$1: $2")
+	if utf8.RuneCountInString(reason) > maxCannotRun {
+		runes := []rune(reason)
+		reason = strings.TrimSpace(string(runes[:maxCannotRun-3])) + "..."
+	}
+	if reason == "" {
+		reason = "`samba-tool --version` failed"
+	}
+	return reason
+}
 
 // NewReal locates samba-tool and, when not running as root, validates the
 // configured privilege prefix.
@@ -411,6 +454,18 @@ func loadDomain(ctx context.Context, read readFunc, server string) (directory.Mo
 
 	version, err := read(ctx, "--version")
 	if err != nil {
+		// Absent and broken are different facts with different fixes: one is
+		// a package to install, the other a package that is installed and a
+		// module, a library or an escalation that is not. Only the runner's
+		// "not found" means absent; any other failure is a samba-tool that
+		// exists and could not run, and the model says which.
+		if reason := CannotRun(err); reason != "" {
+			model.Installed = true
+			model.CannotRun = reason
+			model.Detail = "samba-tool is " +
+				directory.SambaToolState(true, reason)
+			return model, ""
+		}
 		model.Detail = runner.FirstLine(err.Error())
 		return model, ""
 	}
