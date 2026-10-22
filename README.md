@@ -1,9 +1,12 @@
 <img src="assets/logo.png" alt="tui-tools" width="240">
 
-> **Private and unreleased.** This repository is not public yet and nothing has
-> been tagged. It has never been run against a real Samba domain controller —
-> see [What is still missing](#what-is-still-missing) before trusting it with
-> one.
+<!-- stability:start -->
+> **Beta** tools may still change keys, flags or output before their 1.0;
+> stable tools follow semver. Pin versions, and report what breaks.
+<!-- stability:end -->
+
+> It has never been run against a real Samba domain controller — see [What is
+> still missing](#what-is-still-missing) before trusting it with one.
 
 # tui-dc
 
@@ -391,7 +394,7 @@ pkgs.tui.tools.
 ### Any distribution, static binary — coming soon
 
 ```sh
-curl -fsSL https://github.com/tui-tools/tui-dc/releases/download/v0.2.2/tui-dc_0.2.2_linux_amd64.tar.gz | tar -xz tui-dc
+curl -fsSL https://github.com/tui-tools/tui-dc/releases/download/v0.2.5/tui-dc_0.2.5_linux_amd64.tar.gz | tar -xz tui-dc
 sudo install -m0755 tui-dc /usr/local/bin/tui-dc
 ```
 
