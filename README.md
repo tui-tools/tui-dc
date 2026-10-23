@@ -238,21 +238,32 @@ It is also not a file server tool. The Samba on a domain controller also serves
 `sysvol` and `netlogon`, but shares, sessions and the password database are
 [tui-samba](https://github.com/tui-tools/tui-samba), and the two do not overlap.
 
-## When a web console fits better
+## When another project fits better
 
-tui-dc is a terminal UI for the people who administer the domain from a shell
-on the controller. Some domains need more than that: a self-service portal
-where everyone changes their own password, single sign-on for other
-applications with OpenID Connect or SAML, provisioning to Google Workspace, or
-a team that prefers to work from a browser. For those,
-[Samba Conductor](https://openbasalt.org/projects/samba-conductor/) is the
-better choice: a web console, self-service portal and identity provider for a
-Samba Active Directory domain. Both work on the domain's own directory, so a
-team can use the console day to day and still open tui-dc on the controller.
+tui-dc administers a domain from a terminal on the controller, one previewed
+`samba-tool` command at a time. Another project may fit better when you want:
 
-Samba Conductor is a separate project by the same author, published under the
-OpenBasalt organization; it is not part of tui-tools and tui-dc does not depend
-on it. The guide
+- a web console, for a team that would rather manage the domain from a
+  browser, with two-factor sign-in for administrators and an audit log of
+  every change;
+- an OpenID Connect provider and a SAML 2.0 identity provider backed by the
+  domain accounts;
+- Google Workspace sync, or a one-time import of the users and groups of an
+  existing Google Workspace;
+- a self-service portal where people in the domain edit their own profile and
+  change their own password;
+- encrypted domain backups, or shares on domain-member file servers managed
+  from the same place.
+
+That is [Samba Conductor](https://openbasalt.org/projects/samba-conductor/), a
+web console, self-service portal and single sign-on for a Samba Active
+Directory domain, from the OpenBasalt organization. It has signed releases with
+packages for Debian, Ubuntu and Fedora and container images; its project page
+has the current version and status. Both work on the domain's own directory, so
+a team can use the console day to day and still open tui-dc on the controller.
+
+Samba Conductor comes from the same author as tui-tools. It is a separate
+project, not part of tui-tools, and tui-dc does not depend on it. The guide
 [tui-dc, or a web console like Samba Conductor](https://tui.tools/guides/samba-active-directory-tui-dc-or-samba-conductor/)
 compares the two in more detail.
 
